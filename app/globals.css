@@ -1,26 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Colors */
+  --color-navy-50:  #EEF2F7;
+  --color-navy-100: #D5E0EC;
+  --color-navy-200: #AABFD8;
+  --color-navy-300: #7F9EC5;
+  --color-navy-400: #547DB1;
+  --color-navy-500: #2A5C9E;
+  --color-navy-600: #1A3A5C;
+  --color-navy-700: #152F4A;
+  --color-navy-800: #102438;
+  --color-navy-900: #0A1826;
+
+  --color-surface:           #FFFFFF;
+  --color-surface-secondary: #F5F7FA;
+  --color-surface-tertiary:  #E8EDF2;
+
+  --color-border:       #D8E0E9;
+  --color-border-strong:#B0BEC9;
+
+  --color-text-primary:   #0F1C2E;
+  --color-text-secondary: #4A5E72;
+  --color-text-muted:     #8A9BB0;
+  --color-text-inverse:   #FFFFFF;
+
+  --color-success:       #1A7F5A;
+  --color-success-light: #E6F4EF;
+  --color-warning:       #B45309;
+  --color-warning-light: #FEF3C7;
+  --color-error:         #B91C1C;
+  --color-error-light:   #FEE2E2;
+  --color-info:          #1D4ED8;
+  --color-info-light:    #EFF6FF;
+
+  /* Typography */
+  --font-sans: 'Jost', system-ui, sans-serif;
+
+  /* Spacing extras */
+  --spacing-18:  4.5rem;
+  --spacing-22:  5.5rem;
+  --spacing-88:  22rem;
+  --spacing-128: 32rem;
+
+  /* Border radius */
+  --radius-sm:  0.125rem;
+  --radius:     0.25rem;
+  --radius-md:  0.375rem;
+  --radius-lg:  0.5rem;
+  --radius-xl:  0.75rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-navy-600);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-navy-100);
+    color: var(--color-navy-900);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .container-page {
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .section-pad {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+
+  @media (min-width: 1024px) {
+    .container-page {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    .section-pad {
+      padding-top: 6rem;
+      padding-bottom: 6rem;
+    }
+  }
 }
