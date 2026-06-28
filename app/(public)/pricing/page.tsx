@@ -10,7 +10,7 @@ const plans = [
   {
     id: "starter",
     name: "Starter",
-    price: 15000,
+    price: 75000,
     period: "per term",
     description: "For small schools getting their admin in order.",
     highlight: false,
@@ -26,7 +26,7 @@ const plans = [
   {
     id: "growth",
     name: "Growth",
-    price: 35000,
+    price: 150000,
     period: "per term",
     description: "For growing schools that need the full toolkit.",
     highlight: true,
@@ -46,7 +46,7 @@ const plans = [
   {
     id: "professional",
     name: "Professional",
-    price: 65000,
+    price: 450000,
     period: "per term",
     description: "For established schools with complex needs.",
     highlight: false,
