@@ -292,7 +292,7 @@ export interface ReminderConfig {
 // COMMUNICATION
 // ============================================================
 
-export type MessageChannel = "sms" | "email" | "both";
+export type MessageChannel = "sms" | "email" | "push";
 export type MessageStatus = "draft" | "sent" | "failed" | "scheduled";
 
 export interface Message {

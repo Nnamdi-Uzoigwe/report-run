@@ -234,7 +234,7 @@ export const mockReminderConfigs: ReminderConfig[] = [
 export const mockMessages: Message[] = [
   { id: "msg_001", subject: "Third Term Examination Timetable", body: "Dear Parents, please find attached the examination timetable for the Third Term 2024/2025. All students are expected to be punctual.", channel: "email", recipients: [{ type: "all" }], recipientCount: 616, status: "sent", sentAt: "2025-06-01T08:00:00Z", createdBy: "Amaka Okonkwo", createdAt: "2025-06-01T07:50:00Z" },
   { id: "msg_002", subject: "School Fees Reminder", body: "This is a reminder that school fees are due. Please ensure payment before the deadline.", channel: "sms", recipients: [{ type: "class", classId: "cls_006" }], recipientCount: 85, status: "sent", sentAt: "2025-06-10T09:00:00Z", createdBy: "Amaka Okonkwo", createdAt: "2025-06-10T08:55:00Z" },
-  { id: "msg_003", subject: "PTA Meeting Notice", body: "A PTA meeting is scheduled for Saturday June 28, 2025 at 10am. All parents are required to attend.", channel: "both", recipients: [{ type: "all" }], recipientCount: 616, status: "scheduled", scheduledAt: "2025-06-25T08:00:00Z", createdBy: "Amaka Okonkwo", createdAt: "2025-06-20T10:00:00Z" },
+  { id: "msg_003", subject: "PTA Meeting Notice", body: "A PTA meeting is scheduled for Saturday June 28, 2025 at 10am. All parents are required to attend.", channel: "push", recipients: [{ type: "all" }], recipientCount: 616, status: "scheduled", scheduledAt: "2025-06-25T08:00:00Z", createdBy: "Amaka Okonkwo", createdAt: "2025-06-20T10:00:00Z" },
 ];
 
 export const mockDashboardMetrics: DashboardMetrics = {
