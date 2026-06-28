@@ -1,29 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, GraduationCap, CreditCard,
   BookOpen, School, Settings, MessageSquare, Menu, X,
-  LogOut, ChevronRight, Bell,
+  LogOut, ChevronRight,
 } from "lucide-react";
 import { classNames } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
-import { logout } from "@/lib/api";
+import { useMe } from "@/lib/hooks/useMe";
+import { logoutAction } from "@/lib/actions/auth";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 // ── Nav config ────────────────────────────────────────────────
 
-const navItems = [
-  { label: "Dashboard",     href: "/dashboard",             icon: LayoutDashboard },
-  { label: "Staff Duties",  href: "/dashboard/duties",      icon: Users           },
-  { label: "Students",      href: "/dashboard/students",    icon: GraduationCap   },
-  { label: "Collections",   href: "/dashboard/collections", icon: CreditCard      },
-  { label: "Academics",     href: "/dashboard/academics",   icon: BookOpen        },
-  { label: "Classes",       href: "/dashboard/classes",     icon: School          },
-  { label: "Messages",      href: "/dashboard/messages",    icon: MessageSquare   },
-  { label: "Settings",      href: "/dashboard/settings",    icon: Settings        },
-];
+const ALL_NAV_ITEMS = [
+  {
+    label:     "Dashboard",
+    href:      "/dashboard",
+    icon:      LayoutDashboard,
+    roles:     ["super_admin", "admin", "teacher", "accountant"],
+  },
+  {
+    label:     "Staff Duties",
+    href:      "/dashboard/duties",
+    icon:      Users,
+    roles:     ["super_admin", "admin"],
+  },
+  {
+    label:     "Students",
+    href:      "/dashboard/students",
+    icon:      GraduationCap,
+    roles:     ["super_admin", "admin"],
+  },
+  {
+    label:     "Collections",
+    href:      "/dashboard/collections",
+    icon:      CreditCard,
+    roles:     ["super_admin", "admin", "accountant"],
+  },
+  {
+    label:     "Academics",
+    href:      "/dashboard/academics",
+    icon:      BookOpen,
+    roles:     ["super_admin", "admin", "teacher"],
+  },
+  {
+    label:     "Classes",
+    href:      "/dashboard/classes",
+    icon:      School,
+    roles:     ["super_admin", "admin"],
+  },
+  {
+    label:     "Messages",
+    href:      "/dashboard/messages",
+    icon:      MessageSquare,
+    roles:     ["super_admin", "admin"],
+  },
+  {
+    label:     "Settings",
+    href:      "/dashboard/settings",
+    icon:      Settings,
+    roles:     ["super_admin", "admin"],
+  },
+] as const;
 
 // ── Sidebar ───────────────────────────────────────────────────
 
@@ -37,9 +79,13 @@ function Sidebar({
   const pathname = usePathname();
   const router   = useRouter();
   const { user, clearUser } = useAuthStore();
+  const role     = useAuthStore((s) => s.role);
+ const navItems = ALL_NAV_ITEMS.filter((item) =>
+    !role || (item.roles as readonly string[]).includes(role)
+  );
 
-  async function handleLogout() {
-    await logout();
+async function handleLogout() {
+    await logoutAction();
     clearUser();
     router.push("/login");
   }
@@ -160,7 +206,7 @@ function Sidebar({
 
 function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
-  const current  = navItems.find((n) => n.href === pathname);
+  const current  = ALL_NAV_ITEMS.find((n) => n.href === pathname);
 
   return (
     <header className="h-14 bg-surface border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20">
@@ -176,26 +222,28 @@ function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           {current?.label ?? "Dashboard"}
         </h1>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
-          aria-label="Notifications"
-        >
-          <Bell size={16} />
-        </button>
+     <div className="flex items-center gap-2">
+        <NotificationBell />
       </div>
     </header>
   );
 }
 
 // ── Layout ────────────────────────────────────────────────────
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+  const { error } = useMe();
+
+  useEffect(() => {
+    if (error && (error as any)?.status === 401) {
+      router.replace("/login");
+    }
+  }, [error, router]);
 
   return (
     <div className="min-h-screen bg-surface-secondary">
@@ -203,8 +251,6 @@ export default function DashboardLayout({
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
-
-      {/* Main */}
       <div className="lg:pl-56 flex flex-col min-h-screen">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 lg:p-6">

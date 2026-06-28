@@ -6,26 +6,39 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PageHeader, Card, CardHeader, Badge, Button,
-  Modal, Input, Select, EmptyState, Table,
+  PageHeader,
+  Card,
+  CardHeader,
+  Badge,
+  Button,
+  Modal,
+  Input,
+  Select,
+  EmptyState,
+  Table,
 } from "@/components/ui";
 import {
-  fetchResults, fetchStudents, fetchSubjects,
-  fetchClasses, upsertResult,
+  fetchResults,
+  fetchStudents,
+  fetchSubjects,
+  fetchClasses,
+  upsertResult,
 } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import type { Result, Student, Subject, Class, SelectOption } from "@/types";
+import { usePermission } from "@/lib/hooks/usePermission";
+import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 
 // ── Schema ────────────────────────────────────────────────────
 
 const schema = z.object({
-  studentId:  z.string().min(1, "Select a student"),
-  subjectId:  z.string().min(1, "Select a subject"),
-  classId:    z.string().min(1, "Select a class"),
-  ca:         z.coerce.number().min(0).max(40, "CA max is 40"),
-  exam:       z.coerce.number().min(0).max(60, "Exam max is 60"),
-  term:       z.string().min(1, "Select a term"),
-  session:    z.string().min(1, "Enter session"),
+  studentId: z.string().min(1, "Select a student"),
+  subjectId: z.string().min(1, "Select a subject"),
+  classId: z.string().min(1, "Select a class"),
+  ca: z.coerce.number().min(0).max(40, "CA max is 40"),
+  exam: z.coerce.number().min(0).max(60, "Exam max is 60"),
+  term: z.string().min(1, "Select a term"),
+  session: z.string().min(1, "Enter session"),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -33,44 +46,49 @@ type FormData = z.infer<typeof schema>;
 // ── Helpers ───────────────────────────────────────────────────
 
 function getGrade(total: number): { grade: string; remark: string } {
-  if (total >= 75) return { grade: "A1", remark: "Excellent"  };
-  if (total >= 70) return { grade: "B2", remark: "Very Good"  };
-  if (total >= 65) return { grade: "B3", remark: "Good"       };
-  if (total >= 60) return { grade: "C4", remark: "Credit"     };
-  if (total >= 55) return { grade: "C5", remark: "Credit"     };
-  if (total >= 50) return { grade: "C6", remark: "Credit"     };
-  if (total >= 45) return { grade: "D7", remark: "Pass"       };
-  if (total >= 40) return { grade: "E8", remark: "Pass"       };
-  return              { grade: "F9", remark: "Fail"       };
+  if (total >= 75) return { grade: "A1", remark: "Excellent" };
+  if (total >= 70) return { grade: "B2", remark: "Very Good" };
+  if (total >= 65) return { grade: "B3", remark: "Good" };
+  if (total >= 60) return { grade: "C4", remark: "Credit" };
+  if (total >= 55) return { grade: "C5", remark: "Credit" };
+  if (total >= 50) return { grade: "C6", remark: "Credit" };
+  if (total >= 45) return { grade: "D7", remark: "Pass" };
+  if (total >= 40) return { grade: "E8", remark: "Pass" };
+  return { grade: "F9", remark: "Fail" };
 }
 
-function gradeVariant(grade: string): "success" | "warning" | "error" | "default" {
+function gradeVariant(
+  grade: string,
+): "success" | "warning" | "error" | "default" {
   if (["A1", "B2", "B3"].includes(grade)) return "success";
   if (["C4", "C5", "C6"].includes(grade)) return "warning";
-  if (["F9"].includes(grade))             return "error";
+  if (["F9"].includes(grade)) return "error";
   return "default";
 }
 
 const TERM_OPTIONS: SelectOption[] = [
-  { value: "First Term",  label: "First Term"  },
+  { value: "First Term", label: "First Term" },
   { value: "Second Term", label: "Second Term" },
-  { value: "Third Term",  label: "Third Term"  },
+  { value: "Third Term", label: "Third Term" },
 ];
 
 // ── Page ──────────────────────────────────────────────────────
 
 export default function AcademicsPage() {
-  const [results,   setResults  ] = useState<Result[]>([]);
-  const [students,  setStudents ] = useState<Student[]>([]);
-  const [subjects,  setSubjects ] = useState<Subject[]>([]);
-  const [classes,   setClasses  ] = useState<Class[]>([]);
-  const [loading,   setLoading  ] = useState(true);
-  const [error,     setError    ] = useState<string | null>(null);
+  const [results, setResults] = useState<Result[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [saving,    setSaving   ] = useState(false);
-  const [search,    setSearch   ] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [activeTab, setActiveTab] = useState<"results" | "subjects">("results");
+
+  const { can } = usePermission();
+  const readOnly = !can.enterScores;
 
   const {
     register,
@@ -107,25 +125,25 @@ export default function AcademicsPage() {
     try {
       const student = students.find((s) => s.id === data.studentId);
       const subject = subjects.find((s) => s.id === data.subjectId);
-      const cls     = classes.find((c) => c.id === data.classId);
-      const total   = data.ca + data.exam;
+      const cls = classes.find((c) => c.id === data.classId);
+      const total = data.ca + data.exam;
       const { grade, remark } = getGrade(total);
 
       const created = await upsertResult({
-        studentId:    data.studentId,
-        studentName:  student ? `${student.firstName} ${student.lastName}` : "",
+        studentId: data.studentId,
+        studentName: student ? `${student.firstName} ${student.lastName}` : "",
         admissionNumber: student?.admissionNumber ?? "",
-        classId:      data.classId,
-        className:    cls?.name ?? "",
-        subjectId:    data.subjectId,
-        subjectName:  subject?.name ?? "",
-        ca:           data.ca,
-        exam:         data.exam,
+        classId: data.classId,
+        className: cls?.name ?? "",
+        subjectId: data.subjectId,
+        subjectName: subject?.name ?? "",
+        ca: data.ca,
+        exam: data.exam,
         total,
         grade,
         remark,
-        term:         data.term,
-        session:      data.session,
+        term: data.term,
+        session: data.session,
       });
       setResults((prev) => [created, ...prev]);
       reset({ term: "Third Term", session: "2024/2025" });
@@ -141,8 +159,7 @@ export default function AcademicsPage() {
       search === "" ||
       r.studentName.toLowerCase().includes(search.toLowerCase()) ||
       r.subjectName.toLowerCase().includes(search.toLowerCase());
-    const matchesClass =
-      classFilter === "" || r.classId === classFilter;
+    const matchesClass = classFilter === "" || r.classId === classFilter;
     return matchesSearch && matchesClass;
   });
 
@@ -153,10 +170,7 @@ export default function AcademicsPage() {
   }));
 
   const subjectOptions: SelectOption[] = subjects
-    .filter((s) =>
-      !selectedClassId ||
-      s.classIds.includes(selectedClassId)
-    )
+    .filter((s) => !selectedClassId || s.classIds.includes(selectedClassId))
     .map((s) => ({ value: s.id, label: s.name }));
 
   const classOptions: SelectOption[] = classes.map((c) => ({
@@ -170,11 +184,11 @@ export default function AcademicsPage() {
   ];
 
   // Summary stats
-  const avgScore    = results.length
+  const avgScore = results.length
     ? Math.round(results.reduce((s, r) => s + r.total, 0) / results.length)
     : 0;
-  const passCount   = results.filter((r) => r.total >= 50).length;
-  const failCount   = results.filter((r) => r.total < 50).length;
+  const passCount = results.filter((r) => r.total >= 50).length;
+  const failCount = results.filter((r) => r.total < 50).length;
 
   // Table columns
   const resultColumns = [
@@ -261,9 +275,7 @@ export default function AcademicsPage() {
       key: "teacher",
       header: "Teacher",
       render: (s: Subject) => (
-        <span className="text-text-secondary">
-          {s.teacherName ?? "—"}
-        </span>
+        <span className="text-text-secondary">{s.teacherName ?? "—"}</span>
       ),
     },
     {
@@ -283,7 +295,10 @@ export default function AcademicsPage() {
         <div className="h-8 w-48 bg-surface-tertiary rounded animate-pulse" />
         <div className="grid sm:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 bg-surface-tertiary rounded-lg animate-pulse" />
+            <div
+              key={i}
+              className="h-24 bg-surface-tertiary rounded-lg animate-pulse"
+            />
           ))}
         </div>
         <div className="h-96 bg-surface-tertiary rounded-lg animate-pulse" />
@@ -305,14 +320,19 @@ export default function AcademicsPage() {
   return (
     <>
       <div className="flex flex-col gap-6">
+        {readOnly && (
+          <ReadOnlyBanner message="Only admins and teachers can enter results." />
+        )}
         <PageHeader
           title="Academics & Results"
           subtitle="Third Term, 2024/2025"
           action={
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus size={15} />
-              Enter result
-            </Button>
+            !readOnly ? (
+              <Button onClick={() => setModalOpen(true)}>
+                <Plus size={15} />
+                Enter result
+              </Button>
+            ) : undefined
           }
         />
 
@@ -320,8 +340,8 @@ export default function AcademicsPage() {
         <div className="grid sm:grid-cols-3 gap-4">
           {[
             { label: "Total results entered", value: results.length },
-            { label: "Average score",         value: `${avgScore}%` },
-            { label: "Pass / Fail",           value: `${passCount} / ${failCount}` },
+            { label: "Average score", value: `${avgScore}%` },
+            { label: "Pass / Fail", value: `${passCount} / ${failCount}` },
           ].map((stat) => (
             <Card key={stat.label} padding="sm">
               <p className="text-xs text-text-muted mb-1">{stat.label}</p>
@@ -340,15 +360,15 @@ export default function AcademicsPage() {
           />
           <div className="flex flex-wrap gap-2">
             {[
-              { grade: "A1", range: "75–100", variant: "success"  },
-              { grade: "B2", range: "70–74",  variant: "success"  },
-              { grade: "B3", range: "65–69",  variant: "success"  },
-              { grade: "C4", range: "60–64",  variant: "warning"  },
-              { grade: "C5", range: "55–59",  variant: "warning"  },
-              { grade: "C6", range: "50–54",  variant: "warning"  },
-              { grade: "D7", range: "45–49",  variant: "default"  },
-              { grade: "E8", range: "40–44",  variant: "default"  },
-              { grade: "F9", range: "0–39",   variant: "error"    },
+              { grade: "A1", range: "75–100", variant: "success" },
+              { grade: "B2", range: "70–74", variant: "success" },
+              { grade: "B3", range: "65–69", variant: "success" },
+              { grade: "C4", range: "60–64", variant: "warning" },
+              { grade: "C5", range: "55–59", variant: "warning" },
+              { grade: "C6", range: "50–54", variant: "warning" },
+              { grade: "D7", range: "45–49", variant: "default" },
+              { grade: "E8", range: "40–44", variant: "default" },
+              { grade: "F9", range: "0–39", variant: "error" },
             ].map((g) => (
               <div
                 key={g.grade}
@@ -356,7 +376,9 @@ export default function AcademicsPage() {
               >
                 <Badge
                   label={g.grade}
-                  variant={g.variant as "success" | "warning" | "error" | "default"}
+                  variant={
+                    g.variant as "success" | "warning" | "error" | "default"
+                  }
                 />
                 <span className="text-xs text-text-muted">{g.range}</span>
               </div>
@@ -404,7 +426,9 @@ export default function AcademicsPage() {
                 className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
               >
                 {classFilterOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -460,7 +484,10 @@ export default function AcademicsPage() {
       {/* Enter Result Modal */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => { setModalOpen(false); reset(); }}
+        onClose={() => {
+          setModalOpen(false);
+          reset();
+        }}
         title="Enter result"
         subtitle="CA max: 40 points — Exam max: 60 points"
         size="md"
@@ -468,14 +495,14 @@ export default function AcademicsPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => { setModalOpen(false); reset(); }}
+              onClick={() => {
+                setModalOpen(false);
+                reset();
+              }}
             >
               Cancel
             </Button>
-            <Button
-              loading={saving}
-              onClick={handleSubmit(onSubmit as any)}
-            >
+            <Button loading={saving} onClick={handleSubmit(onSubmit as any)}>
               Save result
             </Button>
           </>

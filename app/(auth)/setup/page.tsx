@@ -9,6 +9,9 @@ import { CheckCircle } from "lucide-react";
 import { Button, Input, Select } from "@/components/ui";
 import { classNames } from "@/lib/utils";
 import type { SetupFormData } from "@/types";
+import { apiClient, setTokens } from "@/lib/api-client";
+import { useAuthStore }   from "@/lib/store";
+import { registerAction } from "@/lib/actions/auth";
 
 // ── Schema ────────────────────────────────────────────────────
 
@@ -48,6 +51,8 @@ export default function SetupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const setUser = useAuthStore((s) => s.setUser);
+const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
@@ -69,12 +74,35 @@ export default function SetupPage() {
     const valid = await trigger(stepFields[step]);
     if (valid) setStep((s) => s + 1);
   }
-
-  async function onSubmit(data: SetupFormData) {
+async function onSubmit(data: SetupFormData) {
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    console.log("Setup complete:", data);
-    router.push("/dashboard");
+    setServerError(null);
+    try {
+      const nameParts = data.principalName.trim().split(" ");
+      const firstName = nameParts[0];
+      const lastName  = nameParts.slice(1).join(" ") || "Admin";
+
+      const result = await registerAction({
+        firstName,
+        lastName,
+        email:        data.adminEmail,
+        password:     data.adminPassword,
+        schoolName:   data.schoolName,
+        currencyCode: "NGN",
+        address:      data.schoolAddress,
+        phone:        data.schoolPhone,
+      });
+
+      if (result.error) {
+        setServerError(result.error);
+        return;
+      }
+
+      if (result.user) setUser(result.user); 
+      router.push("/dashboard");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -116,6 +144,12 @@ export default function SetupPage() {
           </div>
         ))}
       </div>
+
+      {serverError && (
+          <div className="p-3 bg-error-light border border-error rounded mb-4" role="alert">
+            <p className="text-sm text-error">{serverError}</p>
+          </div>
+      )}
 
       {/* Card */}
       <div className="bg-surface border border-border rounded-lg p-8">

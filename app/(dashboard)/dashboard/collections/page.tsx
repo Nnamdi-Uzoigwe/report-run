@@ -6,72 +6,95 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PageHeader, Card, StatCard, Badge, Button,
-  Modal, Input, Select, EmptyState, Table,
+  PageHeader,
+  Card,
+  StatCard,
+  Badge,
+  Button,
+  Modal,
+  Input,
+  Select,
+  EmptyState,
+  Table,
 } from "@/components/ui";
 import {
-  fetchPayments, fetchStudents, fetchFeeCategories,
-  fetchReminderConfigs, upsertReminderConfig, recordPayment,
+  fetchPayments,
+  fetchStudents,
+  fetchFeeCategories,
+  fetchReminderConfigs,
+  upsertReminderConfig,
+  recordPayment,
 } from "@/lib/api";
 import {
-  formatCurrency, formatDateTime,
-  getPaymentStatusColor, getPaymentStatusLabel,
+  formatCurrency,
+  formatDateTime,
+  getPaymentStatusColor,
+  getPaymentStatusLabel,
 } from "@/lib/utils";
 import type {
-  Payment, Student, FeeCategory,
-  ReminderConfig, PaymentMethod, SelectOption,
+  Payment,
+  Student,
+  FeeCategory,
+  ReminderConfig,
+  PaymentMethod,
+  SelectOption,
 } from "@/types";
+import { usePermission } from "@/lib/hooks/usePermission";
+import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 
 // ── Schemas ───────────────────────────────────────────────────
 
 const paymentSchema = z.object({
-  studentId:     z.string().min(1, "Select a student"),
+  studentId: z.string().min(1, "Select a student"),
   feeCategoryId: z.string().min(1, "Select a fee category"),
-  amountPaid:    z.coerce.number().min(1, "Enter amount paid"),
-  method:        z.string().min(1, "Select payment method"),
+  amountPaid: z.coerce.number().min(1, "Enter amount paid"),
+  method: z.string().min(1, "Select payment method"),
 });
 
 const reminderSchema = z.object({
-  feeCategoryId:     z.string().min(1, "Select a fee category"),
-  channel:           z.string().min(1, "Select a channel"),
+  feeCategoryId: z.string().min(1, "Select a fee category"),
+  channel: z.string().min(1, "Select a channel"),
   triggerDaysBefore: z.coerce.number().min(1).max(30),
-  message:           z.string().min(10, "Message is too short"),
-  isActive:          z.boolean().optional(),
+  message: z.string().min(10, "Message is too short"),
+  isActive: z.boolean().optional(),
 });
 
-type PaymentForm  = z.infer<typeof paymentSchema>;
+type PaymentForm = z.infer<typeof paymentSchema>;
 type ReminderForm = z.infer<typeof reminderSchema>;
 
 // ── Constants ─────────────────────────────────────────────────
 
 const METHOD_OPTIONS: SelectOption[] = [
-  { value: "cash",          label: "Cash"          },
-  { value: "bank_transfer", label: "Bank Transfer"  },
-  { value: "pos",           label: "POS"           },
-  { value: "online",        label: "Online"        },
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "pos", label: "POS" },
+  { value: "online", label: "Online" },
 ];
 
 const CHANNEL_OPTIONS: SelectOption[] = [
-  { value: "sms",   label: "SMS only"       },
-  { value: "email", label: "Email only"     },
-  { value: "both",  label: "SMS and Email"  },
+  { value: "sms", label: "SMS only" },
+  { value: "email", label: "Email only" },
+  { value: "both", label: "SMS and Email" },
 ];
 
 // ── Page ──────────────────────────────────────────────────────
 
 export default function CollectionsPage() {
-  const [payments,        setPayments       ] = useState<Payment[]>([]);
-  const [students,        setStudents       ] = useState<Student[]>([]);
-  const [feeCategories,   setFeeCategories  ] = useState<FeeCategory[]>([]);
-  const [reminders,       setReminders      ] = useState<ReminderConfig[]>([]);
-  const [loading,         setLoading        ] = useState(true);
-  const [error,           setError          ] = useState<string | null>(null);
-  const [paymentModal,    setPaymentModal   ] = useState(false);
-  const [reminderModal,   setReminderModal  ] = useState(false);
-  const [saving,          setSaving         ] = useState(false);
-  const [search,          setSearch         ] = useState("");
-  const [statusFilter,    setStatusFilter   ] = useState("");
-  const [activeTab,       setActiveTab      ] = useState<"ledger" | "reminders">("ledger");
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [feeCategories, setFeeCategories] = useState<FeeCategory[]>([]);
+  const [reminders, setReminders] = useState<ReminderConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [reminderModal, setReminderModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [activeTab, setActiveTab] = useState<"ledger" | "reminders">("ledger");
+
+  const { can } = usePermission();
+  const readOnly = !can.manageFees;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const paymentForm = useForm<PaymentForm>({
@@ -104,24 +127,24 @@ export default function CollectionsPage() {
   async function onPaymentSubmit(data: PaymentForm) {
     setSaving(true);
     try {
-      const student  = students.find((s) => s.id === data.studentId);
+      const student = students.find((s) => s.id === data.studentId);
       const category = feeCategories.find((f) => f.id === data.feeCategoryId);
-      const created  = await recordPayment({
-        studentId:       data.studentId,
-        studentName:     student ? `${student.firstName} ${student.lastName}` : "",
+      const created = await recordPayment({
+        studentId: data.studentId,
+        studentName: student ? `${student.firstName} ${student.lastName}` : "",
         admissionNumber: student?.admissionNumber ?? "",
-        className:       student?.className ?? "",
-        feeCategoryId:   data.feeCategoryId,
+        className: student?.className ?? "",
+        feeCategoryId: data.feeCategoryId,
         feeCategoryName: category?.name ?? "",
-        amountDue:       category?.amount ?? 0,
-        amountPaid:      data.amountPaid,
-        balance:         (category?.amount ?? 0) - data.amountPaid,
-        status:          data.amountPaid >= (category?.amount ?? 0) ? "paid" : "partial",
-        method:          data.method as PaymentMethod,
-        paidAt:          new Date().toISOString(),
-        receiptNumber:   `RCP-${Date.now()}`,
-        term:            "Third Term",
-        session:         "2024/2025",
+        amountDue: category?.amount ?? 0,
+        amountPaid: data.amountPaid,
+        balance: (category?.amount ?? 0) - data.amountPaid,
+        status: data.amountPaid >= (category?.amount ?? 0) ? "paid" : "partial",
+        method: data.method as PaymentMethod,
+        paidAt: new Date().toISOString(),
+        receiptNumber: `RCP-${Date.now()}`,
+        term: "Third Term",
+        session: "2024/2025",
       });
       setPayments((prev) => [created, ...prev]);
       paymentForm.reset();
@@ -135,13 +158,13 @@ export default function CollectionsPage() {
     setSaving(true);
     try {
       const category = feeCategories.find((f) => f.id === data.feeCategoryId);
-      const created  = await upsertReminderConfig({
-        feeCategoryId:     data.feeCategoryId,
-        feeCategoryName:   category?.name ?? "",
-        channel:           data.channel as ReminderConfig["channel"],
+      const created = await upsertReminderConfig({
+        feeCategoryId: data.feeCategoryId,
+        feeCategoryName: category?.name ?? "",
+        channel: data.channel as ReminderConfig["channel"],
         triggerDaysBefore: data.triggerDaysBefore,
-        message:           data.message,
-        isActive:          data.isActive ?? true,
+        message: data.message,
+        isActive: data.isActive ?? true,
       });
       setReminders((prev) => [...prev, created]);
       reminderForm.reset();
@@ -153,7 +176,7 @@ export default function CollectionsPage() {
 
   function toggleReminder(id: string) {
     setReminders((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r))
+      prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r)),
     );
   }
 
@@ -168,10 +191,14 @@ export default function CollectionsPage() {
   });
 
   // Stats
-  const totalCollected  = payments.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amountPaid, 0);
-  const totalPending    = payments.filter((p) => p.status !== "paid" && p.status !== "waived").reduce((sum, p) => sum + p.balance, 0);
-  const paidCount       = payments.filter((p) => p.status === "paid").length;
-  const unpaidCount     = payments.filter((p) => p.status === "unpaid").length;
+  const totalCollected = payments
+    .filter((p) => p.status === "paid")
+    .reduce((sum, p) => sum + p.amountPaid, 0);
+  const totalPending = payments
+    .filter((p) => p.status !== "paid" && p.status !== "waived")
+    .reduce((sum, p) => sum + p.balance, 0);
+  const paidCount = payments.filter((p) => p.status === "paid").length;
+  const unpaidCount = payments.filter((p) => p.status === "unpaid").length;
 
   // Options
   const studentOptions: SelectOption[] = students.map((s) => ({
@@ -185,11 +212,11 @@ export default function CollectionsPage() {
   }));
 
   const statusOptions: SelectOption[] = [
-    { value: "",        label: "All statuses" },
-    { value: "paid",    label: "Paid"         },
-    { value: "partial", label: "Partial"      },
-    { value: "unpaid",  label: "Unpaid"       },
-    { value: "waived",  label: "Waived"       },
+    { value: "", label: "All statuses" },
+    { value: "paid", label: "Paid" },
+    { value: "partial", label: "Partial" },
+    { value: "unpaid", label: "Unpaid" },
+    { value: "waived", label: "Waived" },
   ];
 
   // Table columns
@@ -240,7 +267,11 @@ export default function CollectionsPage() {
       key: "balance",
       header: "Balance",
       render: (p: Payment) => (
-        <span className={p.balance > 0 ? "text-error font-medium" : "text-text-muted"}>
+        <span
+          className={
+            p.balance > 0 ? "text-error font-medium" : "text-text-muted"
+          }
+        >
           {formatCurrency(p.balance)}
         </span>
       ),
@@ -272,7 +303,10 @@ export default function CollectionsPage() {
         <div className="h-8 w-48 bg-surface-tertiary rounded animate-pulse" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 bg-surface-tertiary rounded-lg animate-pulse" />
+            <div
+              key={i}
+              className="h-28 bg-surface-tertiary rounded-lg animate-pulse"
+            />
           ))}
         </div>
         <div className="h-96 bg-surface-tertiary rounded-lg animate-pulse" />
@@ -294,23 +328,28 @@ export default function CollectionsPage() {
   return (
     <>
       <div className="flex flex-col gap-6">
+        {readOnly && (
+          <ReadOnlyBanner message="Only admins and bursars can record payments." />
+        )}
         <PageHeader
           title="Collections"
           subtitle="Third Term, 2024/2025"
           action={
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setReminderModal(true)}
-              >
-                Manage reminders
-              </Button>
-              <Button size="sm" onClick={() => setPaymentModal(true)}>
-                <Plus size={15} />
-                Record payment
-              </Button>
-            </div>
+            !readOnly ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setReminderModal(true)}
+                >
+                  Manage reminders
+                </Button>
+                <Button size="sm" onClick={() => setPaymentModal(true)}>
+                  <Plus size={15} />
+                  Record payment
+                </Button>
+              </div>
+            ) : undefined
           }
         />
 
@@ -380,7 +419,9 @@ export default function CollectionsPage() {
                 className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
               >
                 {statusOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
               <Button variant="secondary" size="sm">
@@ -476,7 +517,10 @@ export default function CollectionsPage() {
       {/* Record Payment Modal */}
       <Modal
         isOpen={paymentModal}
-        onClose={() => { setPaymentModal(false); paymentForm.reset(); }}
+        onClose={() => {
+          setPaymentModal(false);
+          paymentForm.reset();
+        }}
         title="Record payment"
         subtitle="Enter payment details for a student"
         size="md"
@@ -484,7 +528,10 @@ export default function CollectionsPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => { setPaymentModal(false); paymentForm.reset(); }}
+              onClick={() => {
+                setPaymentModal(false);
+                paymentForm.reset();
+              }}
             >
               Cancel
             </Button>
@@ -536,7 +583,10 @@ export default function CollectionsPage() {
       {/* Reminder Modal */}
       <Modal
         isOpen={reminderModal}
-        onClose={() => { setReminderModal(false); reminderForm.reset(); }}
+        onClose={() => {
+          setReminderModal(false);
+          reminderForm.reset();
+        }}
         title="Add reminder rule"
         subtitle="Configure an automated fee reminder"
         size="md"
@@ -544,7 +594,10 @@ export default function CollectionsPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => { setReminderModal(false); reminderForm.reset(); }}
+              onClick={() => {
+                setReminderModal(false);
+                reminderForm.reset();
+              }}
             >
               Cancel
             </Button>

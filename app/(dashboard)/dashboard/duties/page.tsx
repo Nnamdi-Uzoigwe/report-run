@@ -6,22 +6,42 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PageHeader, Card, CardHeader, Badge,
-  Button, Modal, Input, Select, EmptyState,
+  PageHeader,
+  Card,
+  CardHeader,
+  Badge,
+  Button,
+  Modal,
+  Input,
+  Select,
+  EmptyState,
 } from "@/components/ui";
-import { fetchDutyAssignments, fetchStaff, createDutyAssignment, deleteDutyAssignment } from "@/lib/api";
+import {
+  fetchDutyAssignments,
+  fetchStaff,
+  createDutyAssignment,
+  deleteDutyAssignment,
+} from "@/lib/api";
+import type {
+  DutyAssignment,
+  StaffMember,
+  DayOfWeek,
+  DutyType,
+  SelectOption,
+} from "@/types";
+import { usePermission } from "@/lib/hooks/usePermission";
+import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 import { classNames } from "@/lib/utils";
-import type { DutyAssignment, StaffMember, DayOfWeek, DutyType, SelectOption } from "@/types";
 
 // ── Schema ────────────────────────────────────────────────────
 
 const schema = z.object({
-  staffId:    z.string().min(1, "Select a staff member"),
-  dutyType:   z.string().min(1, "Select a duty type"),
-  location:   z.string().min(1, "Location is required"),
-  dayOfWeek:  z.string().min(1, "Select a day"),
-  startTime:  z.string().min(1, "Start time is required"),
-  endTime:    z.string().min(1, "End time is required"),
+  staffId: z.string().min(1, "Select a staff member"),
+  dutyType: z.string().min(1, "Select a duty type"),
+  location: z.string().min(1, "Location is required"),
+  dayOfWeek: z.string().min(1, "Select a day"),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -29,31 +49,31 @@ type FormData = z.infer<typeof schema>;
 // ── Constants ─────────────────────────────────────────────────
 
 const DAYS: { value: DayOfWeek; label: string }[] = [
-  { value: "monday",    label: "Monday"    },
-  { value: "tuesday",   label: "Tuesday"   },
+  { value: "monday", label: "Monday" },
+  { value: "tuesday", label: "Tuesday" },
   { value: "wednesday", label: "Wednesday" },
-  { value: "thursday",  label: "Thursday"  },
-  { value: "friday",    label: "Friday"    },
+  { value: "thursday", label: "Thursday" },
+  { value: "friday", label: "Friday" },
 ];
 
 const DUTY_TYPES: { value: DutyType; label: string }[] = [
-  { value: "morning_assembly",  label: "Morning Assembly"  },
-  { value: "gate_duty",         label: "Gate Duty"         },
-  { value: "cafeteria",         label: "Cafeteria"         },
-  { value: "exam_supervision",  label: "Exam Supervision"  },
-  { value: "extracurricular",   label: "Extracurricular"   },
-  { value: "sanitation",        label: "Sanitation"        },
-  { value: "library",           label: "Library"           },
+  { value: "morning_assembly", label: "Morning Assembly" },
+  { value: "gate_duty", label: "Gate Duty" },
+  { value: "cafeteria", label: "Cafeteria" },
+  { value: "exam_supervision", label: "Exam Supervision" },
+  { value: "extracurricular", label: "Extracurricular" },
+  { value: "sanitation", label: "Sanitation" },
+  { value: "library", label: "Library" },
 ];
 
 const DUTY_COLORS: Record<DutyType, string> = {
   morning_assembly: "navy",
-  gate_duty:        "info",
-  cafeteria:        "warning",
+  gate_duty: "info",
+  cafeteria: "warning",
   exam_supervision: "error",
-  extracurricular:  "success",
-  sanitation:       "default",
-  library:          "default",
+  extracurricular: "success",
+  sanitation: "default",
+  library: "default",
 };
 
 function getDutyLabel(type: DutyType): string {
@@ -92,7 +112,15 @@ function DayColumn({
               <div className="flex items-start justify-between gap-2 mb-2">
                 <Badge
                   label={getDutyLabel(a.dutyType)}
-                  variant={DUTY_COLORS[a.dutyType] as "navy" | "info" | "warning" | "error" | "success" | "default"}
+                  variant={
+                    DUTY_COLORS[a.dutyType] as
+                      | "navy"
+                      | "info"
+                      | "warning"
+                      | "error"
+                      | "success"
+                      | "default"
+                  }
                 />
                 <button
                   onClick={() => onDelete(a.id)}
@@ -121,11 +149,14 @@ function DayColumn({
 
 export default function DutiesPage() {
   const [assignments, setAssignments] = useState<DutyAssignment[]>([]);
-  const [staff,       setStaff      ] = useState<StaffMember[]>([]);
-  const [loading,     setLoading    ] = useState(true);
-  const [error,       setError      ] = useState<string | null>(null);
-  const [modalOpen,   setModalOpen  ] = useState(false);
-  const [saving,      setSaving     ] = useState(false);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const { can } = usePermission();
+  const readOnly = !can.manageStaff;
 
   const {
     register,
@@ -149,12 +180,12 @@ export default function DutiesPage() {
     try {
       const created = await createDutyAssignment({
         ...data,
-        dutyType:  data.dutyType  as DutyType,
+        dutyType: data.dutyType as DutyType,
         dayOfWeek: data.dayOfWeek as DayOfWeek,
         staffName: staff.find((s) => s.id === data.staffId)
           ? `${staff.find((s) => s.id === data.staffId)!.firstName} ${staff.find((s) => s.id === data.staffId)!.lastName}`
           : "",
-        term:    "Third Term",
+        term: "Third Term",
         session: "2024/2025",
       });
       setAssignments((prev) => [...prev, created]);
@@ -191,7 +222,10 @@ export default function DutiesPage() {
         <div className="h-8 w-48 bg-surface-tertiary rounded animate-pulse" />
         <div className="grid grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-64 bg-surface-tertiary rounded-lg animate-pulse" />
+            <div
+              key={i}
+              className="h-64 bg-surface-tertiary rounded-lg animate-pulse"
+            />
           ))}
         </div>
       </div>
@@ -212,25 +246,34 @@ export default function DutiesPage() {
   return (
     <>
       <div className="flex flex-col gap-6">
+        {readOnly && (
+          <ReadOnlyBanner message="Only admins can assign or remove duties." />
+        )}
         <PageHeader
           title="Staff Duty Allocation"
           subtitle="Third Term, 2024/2025"
           action={
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus size={15} />
-              Assign duty
-            </Button>
+            !readOnly ? (
+              <Button onClick={() => setModalOpen(true)}>
+                <Plus size={15} />
+                Assign duty
+              </Button>
+            ) : undefined
           }
         />
 
         {/* Summary row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {DUTY_TYPES.slice(0, 4).map((duty) => {
-            const count = assignments.filter((a) => a.dutyType === duty.value).length;
+            const count = assignments.filter(
+              (a) => a.dutyType === duty.value,
+            ).length;
             return (
               <Card key={duty.value} padding="sm">
                 <p className="text-xs text-text-muted mb-1">{duty.label}</p>
-                <p className="text-2xl font-semibold text-text-primary">{count}</p>
+                <p className="text-2xl font-semibold text-text-primary">
+                  {count}
+                </p>
                 <p className="text-xs text-text-muted">
                   {count === 1 ? "assignment" : "assignments"}
                 </p>
@@ -307,7 +350,15 @@ export default function DutiesPage() {
                     <td className="px-4 py-3">
                       <Badge
                         label={getDutyLabel(a.dutyType)}
-                        variant={DUTY_COLORS[a.dutyType] as "navy" | "info" | "warning" | "error" | "success" | "default"}
+                        variant={
+                          DUTY_COLORS[a.dutyType] as
+                            | "navy"
+                            | "info"
+                            | "warning"
+                            | "error"
+                            | "success"
+                            | "default"
+                        }
                       />
                     </td>
                     <td className="px-4 py-3 text-text-secondary capitalize">
@@ -322,7 +373,13 @@ export default function DutiesPage() {
                     <td className="px-4 py-3">
                       <button
                         onClick={() => handleDelete(a.id)}
-                        className="p-1.5 text-text-muted hover:text-error hover:bg-error-light rounded transition-colors cursor-pointer"
+                        disabled={readOnly}
+                        className={classNames(
+                          "p-1.5 rounded transition-colors cursor-pointer",
+                          readOnly
+                            ? "text-border cursor-not-allowed"
+                            : "text-text-muted hover:text-error hover:bg-error-light",
+                        )}
                         aria-label="Delete assignment"
                       >
                         <Trash2 size={14} />
@@ -339,7 +396,10 @@ export default function DutiesPage() {
       {/* Modal */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => { setModalOpen(false); reset(); }}
+        onClose={() => {
+          setModalOpen(false);
+          reset();
+        }}
         title="Assign duty"
         subtitle="Add a new duty assignment for this term"
         size="md"
@@ -347,14 +407,14 @@ export default function DutiesPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => { setModalOpen(false); reset(); }}
+              onClick={() => {
+                setModalOpen(false);
+                reset();
+              }}
             >
               Cancel
             </Button>
-            <Button
-              loading={saving}
-              onClick={handleSubmit(onSubmit)}
-            >
+            <Button loading={saving} onClick={handleSubmit(onSubmit)}>
               Save assignment
             </Button>
           </>

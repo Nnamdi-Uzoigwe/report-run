@@ -8,9 +8,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
 import { Button, Input } from "@/components/ui";
-import { login } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
 import type { LoginCredentials } from "@/types";
+import { loginAction } from "@/lib/actions/auth";
 
 // ── Schema ────────────────────────────────────────────────────
 
@@ -37,15 +37,13 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginCredentials) {
     setServerError(null);
-    try {
-      const user = await login(data);
-      setUser(user);
-      router.push("/dashboard");
-    } catch (err) {
-      setServerError(
-        err instanceof Error ? err.message : "Something went wrong."
-      );
+    const result = await loginAction(data.email, data.password);
+    if (result.error) {
+      setServerError(result.error);
+      return;
     }
+    if (result.user) setUser(result.user);
+    router.push("/dashboard");
   }
 
   return (

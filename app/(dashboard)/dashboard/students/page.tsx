@@ -12,6 +12,8 @@ import {
 import { fetchStudents, fetchClasses, createStudent } from "@/lib/api";
 import { getStatusColor, formatDate } from "@/lib/utils";
 import type { Student, Class, SelectOption } from "@/types";
+import { usePermission }  from "@/lib/hooks/usePermission";
+import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 
 // ── Schema ────────────────────────────────────────────────────
 
@@ -44,6 +46,8 @@ export default function StudentsPage() {
   const [classFilter,setClassFilter] = useState("");
   const [selected,   setSelected  ] = useState<Student | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const { can } = usePermission();
+  const readOnly = !can.manageStudents;
 
   const {
     register,
@@ -202,14 +206,19 @@ export default function StudentsPage() {
   return (
     <>
       <div className="flex flex-col gap-6">
+        {readOnly && (
+            <ReadOnlyBanner message="Only admins can add or edit students." />
+        )}
         <PageHeader
           title="Students"
           subtitle={`${students.length} students enrolled`}
           action={
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus size={15} />
-              Add student
-            </Button>
+            !readOnly ? (
+              <Button onClick={() => setModalOpen(true)}>
+                <Plus size={15} />
+                Add student
+              </Button>
+            ) : undefined
           }
         />
 

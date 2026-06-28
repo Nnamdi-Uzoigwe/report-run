@@ -1,6 +1,4 @@
-// Mock API layer — swap these functions for real HTTP calls later.
-// All functions return Promises to simulate async behaviour.
-
+import { apiClient, setTokens, clearTokens } from "@/lib/api-client";
 import {
   mockUser, mockSchool, mockStaff, mockDutyAssignments,
   mockStudents, mockClasses, mockSubjects, mockResults,
@@ -18,19 +16,48 @@ import type {
 const delay = (ms = 600) => new Promise((res) => setTimeout(res, ms));
 
 // ── Auth ──────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────
+
+interface AuthResponse {
+  accessToken:  string;
+  refreshToken: string;
+  user: {
+    id:               string;
+    firstName:        string;
+    lastName?:        string;
+    email:            string;
+    role:             string;
+    schoolId:         string;
+    isEmailVerified:  boolean;
+  };
+}
+
 export async function login(credentials: LoginCredentials): Promise<User> {
-  await delay();
-  if (
-    credentials.email === "admin@greenfield.edu.ng" &&
-    credentials.password === "password123"
-  ) {
-    return mockUser;
-  }
-  throw new Error("Invalid email or password.");
+  const res = await apiClient.post<AuthResponse>("/auth/login", {
+    email:    credentials.email,
+    password: credentials.password,
+  }, { skipAuth: true });
+
+  setTokens(res.accessToken, res.refreshToken);
+
+  return {
+    id:          res.user.id,
+    email:       res.user.email,
+    firstName:   res.user.firstName,
+    lastName:    res.user.lastName ?? "",
+    role:        res.user.role as User["role"],
+    schoolId:    res.user.schoolId,
+    createdAt:   new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+  };
 }
 
 export async function logout(): Promise<void> {
-  await delay(200);
+  try {
+    await apiClient.post("/auth/logout");
+  } finally {
+    clearTokens();
+  }
 }
 
 // ── Dashboard ─────────────────────────────────────────────────
