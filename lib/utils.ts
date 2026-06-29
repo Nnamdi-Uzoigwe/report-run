@@ -43,9 +43,8 @@ export function getStatusColor(status: Status): string {
 export function getPaymentStatusColor(status: PaymentStatus): string {
   const map: Record<PaymentStatus, string> = {
     paid:    "bg-success-light text-success",
-    partial: "bg-warning-light text-warning",
-    unpaid:  "bg-error-light text-error",
-    waived:  "bg-info-light text-info",
+    partially_paid: "bg-warning-light text-warning",
+    defaulter:  "bg-error-light text-error",
   };
   return map[status];
 }
@@ -53,9 +52,8 @@ export function getPaymentStatusColor(status: PaymentStatus): string {
 export function getPaymentStatusLabel(status: PaymentStatus): string {
   const map: Record<PaymentStatus, string> = {
     paid:    "Paid",
-    partial: "Partial",
-    unpaid:  "Unpaid",
-    waived:  "Waived",
+    partially_paid: "Partial",
+    defaulter:  "Unpaid",
   };
   return map[status];
 }

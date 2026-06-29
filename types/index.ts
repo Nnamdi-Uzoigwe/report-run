@@ -65,6 +65,7 @@ export interface User {
   authProvider:    AuthProvider;
   createdAt:       string;
   updatedAt:       string;
+  lastLoginAt?:     any;
 }
 
 export interface LoginCredentials {

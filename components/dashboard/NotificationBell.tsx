@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Bell, CreditCard, MessageSquare, AlertCircle, X } from "lucide-react";
 import { classNames, formatDateTime, formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
-import { mockPayments, mockMessages } from "@/lib/mock-data";
+// import { mockPayments, mockMessages } from "@/lib/mock-data";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -21,46 +21,46 @@ interface Notification {
 
 // ── Build notifications from mock data ────────────────────────
 
-function buildNotifications(): Notification[] {
-  const paymentNotifs: Notification[] = mockPayments
-    .filter((p) => p.paidAt)
-    .slice(0, 3)
-    .map((p) => ({
-      id:        `notif_pay_${p.id}`,
-      type:      "payment",
-      title:     "Payment received",
-      body:      `${p.studentName} — ${formatCurrency(p.amountPaid)} for ${p.feeCategoryName}`,
-      timestamp: p.paidAt!,
-      read:      false,
-    }));
+// function buildNotifications(): Notification[] {
+//   const paymentNotifs: Notification[] = mockPayments
+//     .filter((p) => p.paidAt)
+//     .slice(0, 3)
+//     .map((p) => ({
+//       id:        `notif_pay_${p.id}`,
+//       type:      "payment",
+//       title:     "Payment received",
+//       body:      `${p.studentName} — ${formatCurrency(p.amountPaid)} for ${p.feeCategoryName}`,
+//       timestamp: p.paidAt!,
+//       read:      false,
+//     }));
 
-  const messageNotifs: Notification[] = mockMessages
-    .filter((m) => m.status === "sent")
-    .slice(0, 2)
-    .map((m) => ({
-      id:        `notif_msg_${m.id}`,
-      type:      "message",
-      title:     "Message sent",
-      body:      `"${m.subject}" delivered to ${m.recipientCount} parents`,
-      timestamp: m.sentAt ?? m.createdAt,
-      read:      true,
-    }));
+//   const messageNotifs: Notification[] = mockMessages
+//     .filter((m) => m.status === "sent")
+//     .slice(0, 2)
+//     .map((m) => ({
+//       id:        `notif_msg_${m.id}`,
+//       type:      "message",
+//       title:     "Message sent",
+//       body:      `"${m.subject}" delivered to ${m.recipientCount} parents`,
+//       timestamp: m.sentAt ?? m.createdAt,
+//       read:      true,
+//     }));
 
-  const alertNotifs: Notification[] = [
-    {
-      id:        "notif_alert_001",
-      type:      "alert",
-      title:     "3 students with unpaid fees",
-      body:      "Toluwani Adebayo and 2 others have outstanding balances this term.",
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      read:      false,
-    },
-  ];
+//   const alertNotifs: Notification[] = [
+//     {
+//       id:        "notif_alert_001",
+//       type:      "alert",
+//       title:     "3 students with unpaid fees",
+//       body:      "Toluwani Adebayo and 2 others have outstanding balances this term.",
+//       timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+//       read:      false,
+//     },
+//   ];
 
-  return [...alertNotifs, ...paymentNotifs, ...messageNotifs].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-}
+//   return [...alertNotifs, ...paymentNotifs, ...messageNotifs].sort(
+//     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+//   );
+// }
 
 // ── Icon per type ─────────────────────────────────────────────
 
@@ -92,9 +92,7 @@ function NotifIcon({ type }: { type: NotifType }) {
 
 export function NotificationBell() {
   const [open,          setOpen         ] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(
-    buildNotifications
-  );
+  const [notifications, setNotifications] = useState<any[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 

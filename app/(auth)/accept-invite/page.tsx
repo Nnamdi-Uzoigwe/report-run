@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,34 +14,35 @@ import { keys } from "@/lib/queries/keys";
 
 const schema = z
   .object({
-    password:        z.string().min(8, "Password must be at least 8 characters"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
-    path:    ["confirmPassword"],
+    path: ["confirmPassword"],
   });
 
 type FormData = z.infer<typeof schema>;
 
-export default function AcceptInvitePage() {
+function AcceptInviteContent() {
   const searchParams = useSearchParams();
-  const router       = useRouter();
-  const token        = searchParams.get("token");
+  const router = useRouter();
+  const token = searchParams.get("token") ?? "";
 
-  const setUser     = useAuthStore((s) => s.setUser);
+  const setUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
 
   const [showPassword, setShowPassword] = useState(false);
-  const [error,        setError        ] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  });
 
-  // Token missing
   if (!token) {
     return (
       <div className="w-full max-w-sm">
@@ -64,7 +65,8 @@ export default function AcceptInvitePage() {
 
   async function onSubmit(data: FormData) {
     setError(null);
-    const result = await acceptInviteAction(token!, data.password);
+
+    const result = await acceptInviteAction(token, data.password);
 
     if (result.error) {
       setError(result.error);
@@ -73,7 +75,6 @@ export default function AcceptInvitePage() {
 
     if (!result.user) return;
 
-    // Populate the store and query cache then redirect
     setUser(result.user);
     queryClient.setQueryData(keys.me, result.user);
     router.push("/dashboard");
@@ -92,7 +93,10 @@ export default function AcceptInvitePage() {
         </div>
 
         {error && (
-          <div className="p-3 bg-error-light border border-error rounded mb-5" role="alert">
+          <div
+            className="p-3 bg-error-light border border-error rounded mb-5"
+            role="alert"
+          >
             <p className="text-sm text-error">{error}</p>
           </div>
         )}
@@ -121,6 +125,7 @@ export default function AcceptInvitePage() {
             }
             {...register("password")}
           />
+
           <Input
             label="Confirm password"
             type={showPassword ? "text" : "password"}
@@ -131,7 +136,12 @@ export default function AcceptInvitePage() {
             {...register("confirmPassword")}
           />
 
-          <Button type="submit" fullWidth loading={isSubmitting} className="mt-1">
+          <Button
+            type="submit"
+            fullWidth
+            loading={isSubmitting}
+            className="mt-1"
+          >
             Activate account
           </Button>
         </form>
@@ -142,5 +152,21 @@ export default function AcceptInvitePage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full max-w-sm">
+          <div className="bg-surface border border-border rounded-lg p-8 text-center">
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <AcceptInviteContent />
+    </Suspense>
   );
 }

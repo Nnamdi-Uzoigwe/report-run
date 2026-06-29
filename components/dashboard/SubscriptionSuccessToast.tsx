@@ -1,22 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/lib/store";
 import { keys } from "@/lib/queries/keys";
 
-/**
- * Detects ?subscription=success on the dashboard URL after a Paystack redirect,
- * shows a toast, invalidates the subscription cache, then cleans the URL.
- * Mount this once inside the dashboard layout.
- */
-export function SubscriptionSuccessToast() {
+function SubscriptionSuccessToastContent() {
   const searchParams = useSearchParams();
-  const router       = useRouter();
-  const queryClient  = useQueryClient();
-  const schoolId     = useAuthStore((s) => s.schoolId);
+  const queryClient = useQueryClient();
+  const schoolId = useAuthStore((s) => s.schoolId);
 
   const [visible, setVisible] = useState(false);
 
@@ -56,5 +50,13 @@ export function SubscriptionSuccessToast() {
         <X size={14} />
       </button>
     </div>
+  );
+}
+
+export function SubscriptionSuccessToast() {
+  return (
+    <Suspense fallback={null}>
+      <SubscriptionSuccessToastContent />
+    </Suspense>
   );
 }

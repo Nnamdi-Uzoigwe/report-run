@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,11 +12,11 @@ import { useLogin } from "@/lib/queries/auth";
 import type { LoginCredentials } from "@/types";
 
 const schema = z.object({
-  email:    z.string().email("Enter a valid email address"),
+  email: z.string().email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
-export default function LoginPage() {
+function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const searchParams = useSearchParams();
   const from = searchParams.get("from") ?? "/dashboard";
@@ -26,7 +26,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<LoginCredentials>({
     resolver: zodResolver(schema),
   });
@@ -123,5 +123,21 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full max-w-sm">
+          <div className="bg-surface border border-border rounded-lg p-8 text-center">
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

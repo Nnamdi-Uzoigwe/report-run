@@ -21,15 +21,20 @@ interface ApiUser {
 
 function normaliseUser(u: ApiUser): User {
   return {
-    id:          u.id,
-    email:       u.email,
-    firstName:   u.firstName,
-    lastName:    u.lastName ?? "",
-    role:        u.role as UserRole,
-    schoolId:    u.schoolId,
-    createdAt:   u.createdAt,
-    lastLoginAt: new Date().toISOString(),
-  };
+  id: u.id,
+  email: u.email,
+  firstName: u.firstName,
+  lastName: u.lastName ?? "",
+  role: u.role as UserRole,
+  schoolId: u.schoolId,
+  createdAt: u.createdAt,
+  lastLoginAt: new Date().toISOString(),
+  isActive: false,
+  isEmailVerified: false,
+  inviteStatus: null,
+  authProvider: "local",
+  updatedAt: ""
+};
 }
 
 // ── Actions ───────────────────────────────────────────────────
