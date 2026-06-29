@@ -1,42 +1,59 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = [
+// Paths that do not require authentication
+const PUBLIC_PATHS = new Set([
   "/",
   "/features",
   "/pricing",
   "/about",
   "/contact",
   "/login",
+  "/register",
   "/setup",
   "/forgot-password",
   "/reset-password",
   "/accept-invite",
   "/email-verified",
-];
+]);
+
+// Paths that authenticated users should be bounced away from
+const AUTH_REDIRECT_PATHS = new Set(["/login", "/register", "/setup"]);
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow all public paths and static files
-  const isPublic =
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+  // Always allow Next.js internals, static assets, and API routes
+  if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.includes(".");
+    pathname.startsWith("/api")   ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
 
-  const refreshToken = request.cookies.get("rr_refresh")?.value;
-  const isAuthed     = !!refreshToken;
+  // Check if path is public (exact match or prefix)
+  const isPublic = Array.from(PUBLIC_PATHS).some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  );
 
-  // Redirect unauthenticated users away from dashboard
-  if (!isPublic && !isAuthed) {
+  // We use the refresh token as the auth signal — it lives in an httpOnly cookie
+  // so it's reliable even after page refresh. The access token is shorter-lived
+  // and may already be expired, but the refresh flow handles that.
+  const hasSession = !!request.cookies.get("rr_refresh")?.value;
+
+  // Unauthenticated user trying to access a protected route
+  if (!isPublic && !hasSession) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("from", pathname);
+    // Preserve the original destination so we can redirect back after login
+    if (pathname !== "/") {
+      loginUrl.searchParams.set("from", pathname);
+    }
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect authenticated users away from login/setup
-  if (isAuthed && (pathname === "/login" || pathname === "/setup")) {
+  // Authenticated user trying to access login/register — send them home
+  if (hasSession && AUTH_REDIRECT_PATHS.has(pathname)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

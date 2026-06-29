@@ -2,30 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
 import { Button, Input } from "@/components/ui";
-import { useAuthStore } from "@/lib/store";
+import { useLogin } from "@/lib/queries/auth";
 import type { LoginCredentials } from "@/types";
-import { loginAction } from "@/lib/actions/auth";
-
-// ── Schema ────────────────────────────────────────────────────
 
 const schema = z.object({
   email:    z.string().email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
-// ── Page ──────────────────────────────────────────────────────
-
 export default function LoginPage() {
-  const router   = useRouter();
-  const setUser  = useAuthStore((s) => s.setUser);
   const [showPassword, setShowPassword] = useState(false);
-  const [serverError,  setServerError]  = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from") ?? "/dashboard";
+
+  const login = useLogin(from);
 
   const {
     register,
@@ -36,19 +32,11 @@ export default function LoginPage() {
   });
 
   async function onSubmit(data: LoginCredentials) {
-    setServerError(null);
-    const result = await loginAction(data.email, data.password);
-    if (result.error) {
-      setServerError(result.error);
-      return;
-    }
-    if (result.user) setUser(result.user);
-    router.push("/dashboard");
+    login.mutate(data);
   }
 
   return (
     <div className="w-full max-w-sm">
-      {/* Card */}
       <div className="bg-surface border border-border rounded-lg p-8">
         <div className="mb-6">
           <h1 className="text-xl font-semibold text-text-primary">
@@ -59,21 +47,14 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Demo credentials hint */}
-        <div className="p-3 bg-navy-50 border border-navy-100 rounded mb-6">
-          <p className="text-xs font-medium text-navy-700 mb-1">Demo credentials</p>
-          <p className="text-xs text-navy-600">
-            Email: admin@greenfield.edu.ng
-          </p>
-          <p className="text-xs text-navy-600">Password: password123</p>
-        </div>
-
-        {serverError && (
+        {login.error && (
           <div
             className="p-3 bg-error-light border border-error rounded mb-5"
             role="alert"
           >
-            <p className="text-sm text-error">{serverError}</p>
+            <p className="text-sm text-error">
+              {(login.error as Error).message}
+            </p>
           </div>
         )}
 
@@ -114,7 +95,7 @@ export default function LoginPage() {
 
           <div className="flex items-center justify-end">
             <Link
-              href="#"
+              href="/forgot-password"
               className="text-xs text-navy-600 hover:text-navy-700 no-underline"
             >
               Forgot password?
@@ -124,7 +105,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             fullWidth
-            loading={isSubmitting}
+            loading={login.isPending}
             className="mt-1"
           >
             Sign in
@@ -135,10 +116,10 @@ export default function LoginPage() {
       <p className="text-center text-xs text-text-muted mt-4">
         Don&apos;t have an account?{" "}
         <Link
-          href="/contact"
+          href="/setup"
           className="text-navy-600 hover:text-navy-700 no-underline font-medium"
         >
-          Contact us to get started
+          Create one
         </Link>
       </p>
     </div>

@@ -1,49 +1,75 @@
 import { create } from "zustand";
 import type { User, UserRole } from "@/types";
 
-// ── Role permission helpers ───────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// PERMISSIONS
+// Mirrors what the backend enforces — keep these in sync.
+// ─────────────────────────────────────────────────────────────
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   super_admin: 100,
   admin:       80,
+  bursar:      50,
   teacher:     40,
-  accountant:  40,
   parent:      10,
 };
 
-// What each role can do
-export const ROLE_PERMISSIONS = {
-  canManageStaff:    (role: UserRole) => ["super_admin", "admin"].includes(role),
-  canManageStudents: (role: UserRole) => ["super_admin", "admin"].includes(role),
-  canManageFees:     (role: UserRole) => ["super_admin", "admin", "accountant"].includes(role),
-  canManageClasses:  (role: UserRole) => ["super_admin", "admin"].includes(role),
-  canEnterScores:    (role: UserRole) => ["super_admin", "admin", "teacher"].includes(role),
-  canViewReports:    (role: UserRole) => ["super_admin", "admin", "teacher", "accountant"].includes(role),
-  canManageSettings: (role: UserRole) => ["super_admin", "admin"].includes(role),
-  canSendMessages:   (role: UserRole) => ["super_admin", "admin"].includes(role),
-  isAtLeast:         (role: UserRole, minimum: UserRole) =>
-    ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[minimum],
+export const PERMISSIONS = {
+  // Staff management
+  canInviteStaff:    (r: UserRole) => r === "super_admin" || r === "admin",
+  canManageStaff:    (r: UserRole) => r === "super_admin" || r === "admin",
+
+  // Students
+  canManageStudents: (r: UserRole) => r === "super_admin" || r === "admin",
+
+  // Classes & subjects
+  canManageClasses:  (r: UserRole) => r === "super_admin" || r === "admin",
+  canManageSubjects: (r: UserRole) => r === "super_admin" || r === "admin",
+
+  // Grading
+  canManageGrading:  (r: UserRole) => r === "super_admin" || r === "admin",
+
+  // Academics — teachers can enter scores and submit attendance
+  canEnterScores:    (r: UserRole) => r === "super_admin" || r === "admin" || r === "teacher",
+  canSubmitAttendance: (r: UserRole) => r === "super_admin" || r === "admin" || r === "teacher",
+
+  // Reports — class teachers can also publish
+  canGenerateReports: (r: UserRole) => r === "super_admin" || r === "admin",
+  canPublishReports:  (r: UserRole) => r === "super_admin" || r === "admin" || r === "teacher",
+
+  // Fees — bursar has full access to this area
+  canManageFees:     (r: UserRole) => r === "super_admin" || r === "admin" || r === "bursar",
+  canRecordPayments: (r: UserRole) => r === "super_admin" || r === "admin" || r === "bursar",
+  canViewFeeMetrics: (r: UserRole) => r === "super_admin" || r === "admin" || r === "bursar",
+
+  // School settings & subscriptions
+  canManageSettings: (r: UserRole) => r === "super_admin" || r === "admin",
+  canManagePlans:    (r: UserRole) => r === "super_admin",
+
+  // Utility — role comparison
+  isAtLeast: (r: UserRole, min: UserRole) => ROLE_HIERARCHY[r] >= ROLE_HIERARCHY[min],
 } as const;
 
-// ── Store ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// AUTH STORE
+// ─────────────────────────────────────────────────────────────
 
 interface AuthStore {
   user:            User | null;
   isAuthenticated: boolean;
   setUser:         (user: User) => void;
   clearUser:       () => void;
-  // Convenience getters
+  // Derived — recomputed on every setUser so components
+  // can select these without recalculating inline
   role:            UserRole | null;
   schoolId:        string | null;
-  can:             typeof ROLE_PERMISSIONS;
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
+export const useAuthStore = create<AuthStore>((set) => ({
   user:            null,
   isAuthenticated: false,
   role:            null,
   schoolId:        null,
-  can:             ROLE_PERMISSIONS,
 
   setUser: (user) =>
     set({
