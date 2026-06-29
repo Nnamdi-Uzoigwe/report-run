@@ -1,326 +1,214 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Search, AlertCircle, CreditCard, Download } from "lucide-react";
+import { useState } from "react";
+import { Plus, Search, CreditCard, ExternalLink } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PageHeader,
-  Card,
-  StatCard,
-  Badge,
-  Button,
-  Modal,
-  Input,
-  Select,
-  EmptyState,
-  Table,
+  PageHeader, Card, StatCard, Badge,
+  Button, Modal, Input, Select, EmptyState, Table,
 } from "@/components/ui";
 import {
-  fetchPayments,
-  fetchStudents,
-  fetchFeeCategories,
-  fetchReminderConfigs,
-  upsertReminderConfig,
-  recordPayment,
-} from "@/lib/api";
-import {
-  formatCurrency,
-  formatDateTime,
-  getPaymentStatusColor,
-  getPaymentStatusLabel,
-} from "@/lib/utils";
-import type {
-  Payment,
-  Student,
-  FeeCategory,
-  ReminderConfig,
-  PaymentMethod,
-  SelectOption,
-} from "@/types";
+  useFeeDashboard, useInvoices, useCreateInvoice,
+  useRecordPayment, useDunningConfig, useUpdateDunningConfig,
+  openReceipt,
+} from "@/lib/queries/fees";
+import { useStudents } from "@/lib/queries/students";
 import { usePermission } from "@/lib/hooks/usePermission";
 import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
+import type { FeeInvoice, PaymentStatus, SelectOption } from "@/types";
 
 // ── Schemas ───────────────────────────────────────────────────
 
+const invoiceSchema = z.object({
+  studentId:   z.string().min(1, "Select a student"),
+  termLabel:   z.string().min(1, "Enter term label"),
+  totalAmount: z.coerce.number().min(1, "Enter the total amount"),
+});
+
 const paymentSchema = z.object({
-  studentId: z.string().min(1, "Select a student"),
-  feeCategoryId: z.string().min(1, "Select a fee category"),
-  amountPaid: z.coerce.number().min(1, "Enter amount paid"),
-  method: z.string().min(1, "Select payment method"),
+  invoiceId:       z.string().min(1, "Select an invoice"),
+  percentageToPay: z.coerce.number().min(1).max(100, "Must be 1–100"),
+  paymentMethod:   z.string().optional(),
+  reference:       z.string().optional(),
+  note:            z.string().optional(),
 });
 
-const reminderSchema = z.object({
-  feeCategoryId: z.string().min(1, "Select a fee category"),
-  channel: z.string().min(1, "Select a channel"),
-  triggerDaysBefore: z.coerce.number().min(1).max(30),
-  message: z.string().min(10, "Message is too short"),
-  isActive: z.boolean().optional(),
-});
+// Explicit types avoid Zod's z.coerce inference issues with React Hook Form
+type InvoiceForm = {
+  studentId:   string;
+  termLabel:   string;
+  totalAmount: number;
+};
 
-type PaymentForm = z.infer<typeof paymentSchema>;
-type ReminderForm = z.infer<typeof reminderSchema>;
+type PaymentForm = {
+  invoiceId:       string;
+  percentageToPay: number;
+  paymentMethod?:  string;
+  reference?:      string;
+  note?:           string;
+};
 
-// ── Constants ─────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
+
+function statusLabel(s: PaymentStatus) {
+  if (s === "paid")           return "Paid";
+  if (s === "partially_paid") return "Partial";
+  return "Unpaid";
+}
+function statusVariant(s: PaymentStatus): "success" | "warning" | "error" {
+  if (s === "paid")           return "success";
+  if (s === "partially_paid") return "warning";
+  return "error";
+}
 
 const METHOD_OPTIONS: SelectOption[] = [
-  { value: "cash", label: "Cash" },
+  { value: "cash",          label: "Cash"          },
   { value: "bank_transfer", label: "Bank Transfer" },
-  { value: "pos", label: "POS" },
-  { value: "online", label: "Online" },
+  { value: "pos",           label: "POS"           },
 ];
 
-const CHANNEL_OPTIONS: SelectOption[] = [
-  { value: "sms", label: "SMS only" },
-  { value: "email", label: "Email only" },
-  { value: "both", label: "SMS and Email" },
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: "",               label: "All statuses"   },
+  { value: "paid",           label: "Paid"           },
+  { value: "partially_paid", label: "Partially Paid" },
+  { value: "defaulter",      label: "Defaulter"      },
 ];
 
 // ── Page ──────────────────────────────────────────────────────
 
 export default function CollectionsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [feeCategories, setFeeCategories] = useState<FeeCategory[]>([]);
-  const [reminders, setReminders] = useState<ReminderConfig[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [paymentModal, setPaymentModal] = useState(false);
-  const [reminderModal, setReminderModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [activeTab, setActiveTab] = useState<"ledger" | "reminders">("ledger");
+  const [activeTab,     setActiveTab    ] = useState<"ledger" | "reminders">("ledger");
+  const [invoiceModal,  setInvoiceModal ] = useState(false);
+  const [paymentModal,  setPaymentModal ] = useState(false);
+  const [search,        setSearch       ] = useState("");
+  const [statusFilter,  setStatusFilter ] = useState<PaymentStatus | "">("");
 
   const { can } = usePermission();
   const readOnly = !can.manageFees;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const paymentForm = useForm<PaymentForm>({
-    resolver: zodResolver(paymentSchema) as any,
-  });
+  const { data: metrics,         isLoading: metricsLoading } = useFeeDashboard();
+  const { data: invoices = [],   isLoading: invoicesLoading } = useInvoices(
+    statusFilter || undefined
+  );
+  const { data: students = [] }                               = useStudents();
+  const { data: dunningConfig }                               = useDunningConfig();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reminderForm = useForm<ReminderForm>({
-    resolver: zodResolver(reminderSchema) as any,
-    defaultValues: { triggerDaysBefore: 7, isActive: true },
-  });
+  const createInvoice      = useCreateInvoice();
+  const recordPayment      = useRecordPayment();
+  const updateDunning      = useUpdateDunningConfig();
 
-  useEffect(() => {
-    Promise.all([
-      fetchPayments(),
-      fetchStudents(),
-      fetchFeeCategories(),
-      fetchReminderConfigs(),
-    ])
-      .then(([p, s, f, r]) => {
-        setPayments(p);
-        setStudents(s);
-        setFeeCategories(f);
-        setReminders(r);
-      })
-      .catch(() => setError("Failed to load collections data."))
-      .finally(() => setLoading(false));
-  }, []);
+  const invoiceForm = useForm<InvoiceForm>({ resolver: zodResolver(invoiceSchema) as any });
+  const paymentForm = useForm<PaymentForm>({ resolver: zodResolver(paymentSchema) as any });
+
+  async function onInvoiceSubmit(data: InvoiceForm) {
+    await createInvoice.mutateAsync(data);
+    invoiceForm.reset();
+    setInvoiceModal(false);
+  }
 
   async function onPaymentSubmit(data: PaymentForm) {
-    setSaving(true);
-    try {
-      const student = students.find((s) => s.id === data.studentId);
-      const category = feeCategories.find((f) => f.id === data.feeCategoryId);
-      const created = await recordPayment({
-        studentId: data.studentId,
-        studentName: student ? `${student.firstName} ${student.lastName}` : "",
-        admissionNumber: student?.admissionNumber ?? "",
-        className: student?.className ?? "",
-        feeCategoryId: data.feeCategoryId,
-        feeCategoryName: category?.name ?? "",
-        amountDue: category?.amount ?? 0,
-        amountPaid: data.amountPaid,
-        balance: (category?.amount ?? 0) - data.amountPaid,
-        status: data.amountPaid >= (category?.amount ?? 0) ? "paid" : "partial",
-        method: data.method as PaymentMethod,
-        paidAt: new Date().toISOString(),
-        receiptNumber: `RCP-${Date.now()}`,
-        term: "Third Term",
-        session: "2024/2025",
-      });
-      setPayments((prev) => [created, ...prev]);
-      paymentForm.reset();
-      setPaymentModal(false);
-    } finally {
-      setSaving(false);
+    const result = await recordPayment.mutateAsync(data);
+    paymentForm.reset();
+    setPaymentModal(false);
+    // Offer to open receipt immediately
+    if (result.payment?.id) {
+      openReceipt(result.payment.id);
     }
   }
 
-  async function onReminderSubmit(data: ReminderForm) {
-    setSaving(true);
-    try {
-      const category = feeCategories.find((f) => f.id === data.feeCategoryId);
-      const created = await upsertReminderConfig({
-        feeCategoryId: data.feeCategoryId,
-        feeCategoryName: category?.name ?? "",
-        channel: data.channel as ReminderConfig["channel"],
-        triggerDaysBefore: data.triggerDaysBefore,
-        message: data.message,
-        isActive: data.isActive ?? true,
-      });
-      setReminders((prev) => [...prev, created]);
-      reminderForm.reset();
-      setReminderModal(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function toggleReminder(id: string) {
-    setReminders((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r)),
-    );
-  }
-
-  // Filtered payments
-  const filtered = payments.filter((p) => {
-    const matchesSearch =
-      search === "" ||
-      p.studentName.toLowerCase().includes(search.toLowerCase()) ||
-      p.admissionNumber.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "" || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const filtered = invoices.filter((inv) => {
+    if (!search) return true;
+    const name = `${inv.student.firstName} ${inv.student.lastName}`.toLowerCase();
+    return name.includes(search.toLowerCase()) ||
+      (inv.student.admissionNumber ?? "").toLowerCase().includes(search.toLowerCase());
   });
 
-  // Stats
-  const totalCollected = payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amountPaid, 0);
-  const totalPending = payments
-    .filter((p) => p.status !== "paid" && p.status !== "waived")
-    .reduce((sum, p) => sum + p.balance, 0);
-  const paidCount = payments.filter((p) => p.status === "paid").length;
-  const unpaidCount = payments.filter((p) => p.status === "unpaid").length;
-
-  // Options
   const studentOptions: SelectOption[] = students.map((s) => ({
     value: s.id,
-    label: `${s.firstName} ${s.lastName} (${s.admissionNumber})`,
+    label: `${s.firstName} ${s.lastName}`,
   }));
 
-  const feeCategoryOptions: SelectOption[] = feeCategories.map((f) => ({
-    value: f.id,
-    label: `${f.name} — ${formatCurrency(f.amount)}`,
-  }));
+  const invoiceOptions: SelectOption[] = invoices
+    .filter((inv) => inv.paymentStatus !== "paid")
+    .map((inv) => ({
+      value: inv.id,
+      label: `${inv.student.firstName} ${inv.student.lastName} — ${inv.termLabel} (Balance: ${formatCurrency(Number(inv.balance))})`,
+    }));
 
-  const statusOptions: SelectOption[] = [
-    { value: "", label: "All statuses" },
-    { value: "paid", label: "Paid" },
-    { value: "partial", label: "Partial" },
-    { value: "unpaid", label: "Unpaid" },
-    { value: "waived", label: "Waived" },
-  ];
-
-  // Table columns
   const columns = [
     {
       key: "student",
       header: "Student",
-      render: (p: Payment) => (
+      render: (inv: FeeInvoice) => (
         <div>
-          <p className="font-medium text-text-primary">{p.studentName}</p>
-          <p className="text-xs text-text-muted">{p.admissionNumber}</p>
+          <p className="font-medium text-text-primary">
+            {inv.student.firstName} {inv.student.lastName}
+          </p>
+          <p className="text-xs text-text-muted">{inv.student.admissionNumber ?? "—"}</p>
         </div>
       ),
     },
     {
-      key: "class",
-      header: "Class",
-      render: (p: Payment) => (
-        <span className="text-text-secondary">{p.className}</span>
+      key: "term",
+      header: "Term",
+      render: (inv: FeeInvoice) => (
+        <span className="text-text-secondary">{inv.termLabel}</span>
       ),
     },
     {
-      key: "category",
-      header: "Fee",
-      render: (p: Payment) => (
-        <span className="text-text-secondary">{p.feeCategoryName}</span>
-      ),
-    },
-    {
-      key: "due",
-      header: "Amount Due",
-      render: (p: Payment) => (
+      key: "total",
+      header: "Total",
+      render: (inv: FeeInvoice) => (
         <span className="font-medium text-text-primary">
-          {formatCurrency(p.amountDue)}
+          {formatCurrency(Number(inv.totalAmount))}
         </span>
       ),
     },
     {
       key: "paid",
       header: "Paid",
-      render: (p: Payment) => (
+      render: (inv: FeeInvoice) => (
         <span className="font-medium text-success">
-          {formatCurrency(p.amountPaid)}
+          {formatCurrency(Number(inv.amountPaid))}
         </span>
       ),
     },
     {
       key: "balance",
       header: "Balance",
-      render: (p: Payment) => (
-        <span
-          className={
-            p.balance > 0 ? "text-error font-medium" : "text-text-muted"
-          }
-        >
-          {formatCurrency(p.balance)}
+      render: (inv: FeeInvoice) => (
+        <span className={Number(inv.balance) > 0 ? "text-error font-medium" : "text-text-muted"}>
+          {formatCurrency(Number(inv.balance))}
         </span>
       ),
     },
     {
       key: "status",
       header: "Status",
-      render: (p: Payment) => (
+      render: (inv: FeeInvoice) => (
         <Badge
-          label={getPaymentStatusLabel(p.status)}
-          className={getPaymentStatusColor(p.status)}
+          label={statusLabel(inv.paymentStatus)}
+          variant={statusVariant(inv.paymentStatus)}
         />
-      ),
-    },
-    {
-      key: "date",
-      header: "Date",
-      render: (p: Payment) => (
-        <span className="text-xs text-text-muted">
-          {p.paidAt ? formatDateTime(p.paidAt) : "—"}
-        </span>
       ),
     },
   ];
 
-  if (loading) {
+  const isLoading = metricsLoading || invoicesLoading;
+
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
         <div className="h-8 w-48 bg-surface-tertiary rounded animate-pulse" />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="h-28 bg-surface-tertiary rounded-lg animate-pulse"
-            />
+        <div className="grid sm:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-28 bg-surface-tertiary rounded-lg animate-pulse" />
           ))}
         </div>
         <div className="h-96 bg-surface-tertiary rounded-lg animate-pulse" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-3 text-error">
-          <AlertCircle size={18} />
-          <p className="text-sm">{error}</p>
-        </div>
       </div>
     );
   }
@@ -331,22 +219,19 @@ export default function CollectionsPage() {
         {readOnly && (
           <ReadOnlyBanner message="Only admins and bursars can record payments." />
         )}
+
         <PageHeader
           title="Collections"
-          subtitle="Third Term, 2024/2025"
+          subtitle="Fee ledger and payment management"
           action={
             !readOnly ? (
               <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setReminderModal(true)}
-                >
-                  Manage reminders
-                </Button>
-                <Button size="sm" onClick={() => setPaymentModal(true)}>
-                  <Plus size={15} />
+                <Button variant="secondary" size="sm" onClick={() => setPaymentModal(true)}>
                   Record payment
+                </Button>
+                <Button size="sm" onClick={() => setInvoiceModal(true)}>
+                  <Plus size={15} />
+                  Create invoice
                 </Button>
               </div>
             ) : undefined
@@ -354,29 +239,37 @@ export default function CollectionsPage() {
         />
 
         {/* Stats */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-3 gap-4">
+          <StatCard
+            title="Total expected"
+            value={formatCurrency(metrics?.totalExpected ?? 0)}
+            icon={CreditCard}
+          />
           <StatCard
             title="Total collected"
-            value={formatCurrency(totalCollected)}
+            value={formatCurrency(metrics?.totalSecured ?? 0)}
             icon={CreditCard}
           />
           <StatCard
             title="Outstanding"
-            value={formatCurrency(totalPending)}
-            icon={AlertCircle}
-          />
-          <StatCard
-            title="Fully paid"
-            value={paidCount}
+            value={formatCurrency(metrics?.totalDebt ?? 0)}
             icon={CreditCard}
-            subtitle="students"
           />
-          <StatCard
-            title="Not yet paid"
-            value={unpaidCount}
-            icon={CreditCard}
-            subtitle="students"
-          />
+        </div>
+
+        {/* Status breakdown */}
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: "Paid",           value: metrics?.paidCount      ?? 0, color: "text-success" },
+            { label: "Partially paid", value: metrics?.partialCount    ?? 0, color: "text-warning" },
+            { label: "Defaulters",     value: metrics?.defaulterCount  ?? 0, color: "text-error"   },
+          ].map((item) => (
+            <Card key={item.label} padding="sm">
+              <p className="text-xs text-text-muted mb-1">{item.label}</p>
+              <p className={`text-2xl font-semibold ${item.color}`}>{item.value}</p>
+              <p className="text-xs text-text-muted">students</p>
+            </Card>
+          ))}
         </div>
 
         {/* Tabs */}
@@ -391,23 +284,20 @@ export default function CollectionsPage() {
                   : "border-transparent text-text-muted hover:text-text-primary"
               }`}
             >
-              {tab === "ledger" ? "Payment Ledger" : "Reminder Rules"}
+              {tab === "ledger" ? "Payment Ledger" : "Dunning Reminders"}
             </button>
           ))}
         </div>
 
-        {/* Ledger tab */}
+        {/* Ledger */}
         {activeTab === "ledger" && (
           <Card padding="none">
             <div className="p-4 border-b border-border flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-48">
-                <Search
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-                />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
                   type="search"
-                  placeholder="Search by name or admission number..."
+                  placeholder="Search by student name..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full h-9 pl-8 pr-3 text-sm border border-border rounded bg-surface focus:outline-2 focus:outline-navy-600 placeholder:text-text-muted"
@@ -415,232 +305,198 @@ export default function CollectionsPage() {
               </div>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => setStatusFilter(e.target.value as PaymentStatus | "")}
                 className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
               >
-                {statusOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <Button variant="secondary" size="sm">
-                <Download size={14} />
-                Export
-              </Button>
             </div>
 
             {filtered.length === 0 ? (
               <EmptyState
                 icon={CreditCard}
-                title="No payments found"
+                title="No invoices found"
                 description={
                   search || statusFilter
                     ? "Try adjusting your search or filter."
-                    : "Record the first payment to get started."
+                    : "Create an invoice to start tracking payments."
                 }
               />
             ) : (
               <Table
                 columns={columns}
                 data={filtered}
-                keyExtractor={(p) => p.id}
+                keyExtractor={(inv) => inv.id}
               />
             )}
           </Card>
         )}
 
-        {/* Reminders tab */}
+        {/* Reminders */}
         {activeTab === "reminders" && (
-          <div className="flex flex-col gap-4">
-            {reminders.length === 0 ? (
-              <Card>
-                <EmptyState
-                  icon={CreditCard}
-                  title="No reminder rules"
-                  description="Set up automated reminders to improve your collection rate."
-                  action={
-                    <Button size="sm" onClick={() => setReminderModal(true)}>
-                      <Plus size={14} />
-                      Add reminder rule
-                    </Button>
+          <Card>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Dunning email reminders</p>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Automatic fee reminder emails sent daily to parents with outstanding balances
+                </p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-sm text-text-secondary">
+                  {dunningConfig?.enabled ? "Enabled" : "Disabled"}
+                </span>
+                <button
+                  role="switch"
+                  aria-checked={dunningConfig?.enabled}
+                  onClick={() =>
+                    updateDunning.mutate({ enabled: !dunningConfig?.enabled })
                   }
-                />
-              </Card>
-            ) : (
-              reminders.map((r) => (
-                <Card key={r.id}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-semibold text-text-primary">
-                          {r.feeCategoryName}
-                        </p>
-                        <Badge
-                          label={r.isActive ? "Active" : "Paused"}
-                          variant={r.isActive ? "success" : "default"}
-                        />
-                      </div>
-                      <p className="text-xs text-text-muted mb-2">
-                        Send via {r.channel.toUpperCase()} —{" "}
-                        {r.triggerDaysBefore} days before due date
-                      </p>
-                      <p className="text-sm text-text-secondary bg-surface-secondary border border-border rounded p-3">
-                        {r.message}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={r.isActive ? "secondary" : "primary"}
-                      onClick={() => toggleReminder(r.id)}
-                    >
-                      {r.isActive ? "Pause" : "Activate"}
-                    </Button>
-                  </div>
-                </Card>
-              ))
-            )}
-            <div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setReminderModal(true)}
-              >
-                <Plus size={14} />
-                Add reminder rule
-              </Button>
+                  className={`relative inline-flex h-5 w-9 rounded-full border-2 border-transparent transition-colors cursor-pointer ${
+                    dunningConfig?.enabled ? "bg-navy-600" : "bg-border"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                      dunningConfig?.enabled ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </label>
             </div>
-          </div>
+
+            {dunningConfig && (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-xs text-text-muted mb-1">Days before exam to start reminders</p>
+                  <p className="text-sm font-medium text-text-primary">
+                    {dunningConfig.daysBeforeExam} days
+                  </p>
+                </div>
+                {dunningConfig.emailTemplate && (
+                  <div>
+                    <p className="text-xs text-text-muted mb-1">Custom email template</p>
+                    <p className="text-sm text-text-secondary bg-surface-secondary border border-border rounded p-3">
+                      {dunningConfig.emailTemplate}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
         )}
       </div>
 
-      {/* Record Payment Modal */}
+      {/* Create Invoice Modal */}
       <Modal
-        isOpen={paymentModal}
-        onClose={() => {
-          setPaymentModal(false);
-          paymentForm.reset();
-        }}
-        title="Record payment"
-        subtitle="Enter payment details for a student"
+        isOpen={invoiceModal}
+        onClose={() => { setInvoiceModal(false); invoiceForm.reset(); }}
+        title="Create invoice"
+        subtitle="Create a fee invoice for a student"
         size="md"
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setPaymentModal(false);
-                paymentForm.reset();
-              }}
-            >
+            <Button variant="secondary" onClick={() => { setInvoiceModal(false); invoiceForm.reset(); }}>
               Cancel
             </Button>
             <Button
-              loading={saving}
-              onClick={paymentForm.handleSubmit(onPaymentSubmit as any)}
+              loading={createInvoice.isPending}
+              onClick={invoiceForm.handleSubmit(onInvoiceSubmit)}
             >
-              Record payment
+              Create invoice
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
+          {createInvoice.error && (
+            <p className="text-sm text-error">{(createInvoice.error as Error).message}</p>
+          )}
           <Select
             label="Student"
             required
             options={studentOptions}
             placeholder="Select student"
-            error={paymentForm.formState.errors.studentId?.message}
-            {...paymentForm.register("studentId")}
-          />
-          <Select
-            label="Fee category"
-            required
-            options={feeCategoryOptions}
-            placeholder="Select fee category"
-            error={paymentForm.formState.errors.feeCategoryId?.message}
-            {...paymentForm.register("feeCategoryId")}
+            error={invoiceForm.formState.errors.studentId?.message}
+            {...invoiceForm.register("studentId")}
           />
           <Input
-            label="Amount paid (₦)"
+            label="Term label"
+            placeholder="e.g. First Term 2024/2025"
+            required
+            error={invoiceForm.formState.errors.termLabel?.message}
+            {...invoiceForm.register("termLabel")}
+          />
+          <Input
+            label="Total amount (₦)"
             type="number"
             required
-            placeholder="0"
-            error={paymentForm.formState.errors.amountPaid?.message}
-            {...paymentForm.register("amountPaid")}
-          />
-          <Select
-            label="Payment method"
-            required
-            options={METHOD_OPTIONS}
-            placeholder="Select method"
-            error={paymentForm.formState.errors.method?.message}
-            {...paymentForm.register("method")}
+            placeholder="150000"
+            error={invoiceForm.formState.errors.totalAmount?.message}
+            {...invoiceForm.register("totalAmount")}
           />
         </div>
       </Modal>
 
-      {/* Reminder Modal */}
+      {/* Record Payment Modal */}
       <Modal
-        isOpen={reminderModal}
-        onClose={() => {
-          setReminderModal(false);
-          reminderForm.reset();
-        }}
-        title="Add reminder rule"
-        subtitle="Configure an automated fee reminder"
+        isOpen={paymentModal}
+        onClose={() => { setPaymentModal(false); paymentForm.reset(); }}
+        title="Record payment"
+        subtitle="Enter the percentage of the invoice being paid"
         size="md"
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setReminderModal(false);
-                reminderForm.reset();
-              }}
-            >
+            <Button variant="secondary" onClick={() => { setPaymentModal(false); paymentForm.reset(); }}>
               Cancel
             </Button>
             <Button
-              loading={saving}
-              onClick={reminderForm.handleSubmit(onReminderSubmit as any)}
+              loading={recordPayment.isPending}
+              onClick={paymentForm.handleSubmit(onPaymentSubmit)}
             >
-              Save rule
+              Record & open receipt
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
+          {recordPayment.error && (
+            <p className="text-sm text-error">{(recordPayment.error as Error).message}</p>
+          )}
           <Select
-            label="Fee category"
+            label="Invoice"
             required
-            options={feeCategoryOptions}
-            placeholder="Select fee category"
-            error={reminderForm.formState.errors.feeCategoryId?.message}
-            {...reminderForm.register("feeCategoryId")}
-          />
-          <Select
-            label="Channel"
-            required
-            options={CHANNEL_OPTIONS}
-            placeholder="Select channel"
-            error={reminderForm.formState.errors.channel?.message}
-            {...reminderForm.register("channel")}
+            options={invoiceOptions}
+            placeholder="Select invoice"
+            error={paymentForm.formState.errors.invoiceId?.message}
+            {...paymentForm.register("invoiceId")}
           />
           <Input
-            label="Days before due date"
+            label="Percentage to pay (1–100)"
             type="number"
             required
-            hint="Reminder will be sent this many days before the fee due date"
-            error={reminderForm.formState.errors.triggerDaysBefore?.message}
-            {...reminderForm.register("triggerDaysBefore")}
+            placeholder="40"
+            hint="e.g. 40 means 40% of the total invoice amount"
+            error={paymentForm.formState.errors.percentageToPay?.message}
+            {...paymentForm.register("percentageToPay")}
+          />
+          <Select
+            label="Payment method"
+            options={METHOD_OPTIONS}
+            placeholder="Select method"
+            {...paymentForm.register("paymentMethod")}
           />
           <Input
-            label="Message"
-            required
-            placeholder="Dear Parent, this is a reminder..."
-            error={reminderForm.formState.errors.message?.message}
-            {...reminderForm.register("message")}
+            label="Reference / teller number"
+            placeholder="Optional"
+            {...paymentForm.register("reference")}
+          />
+          <Input
+            label="Note"
+            placeholder="Optional note for the receipt"
+            {...paymentForm.register("note")}
           />
         </div>
       </Modal>

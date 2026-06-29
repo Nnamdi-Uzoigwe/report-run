@@ -1,108 +1,79 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CheckCircle } from "lucide-react";
 import { Button, Input, Select } from "@/components/ui";
 import { classNames } from "@/lib/utils";
-import type { SetupFormData } from "@/types";
-import { apiClient, setTokens } from "@/lib/api-client";
-import { useAuthStore }   from "@/lib/store";
-import { registerAction } from "@/lib/actions/auth";
+import { useRegister } from "@/lib/queries/auth";
 
 // ── Schema ────────────────────────────────────────────────────
 
 const schema = z.object({
-  schoolName:    z.string().min(2,  "School name is required"),
-  schoolAddress: z.string().min(5,  "Address is required"),
-  schoolPhone:   z.string().min(7,  "Phone number is required"),
-  schoolEmail:   z.string().email(  "Enter a valid email"),
-  principalName: z.string().min(2,  "Principal name is required"),
-  adminEmail:    z.string().email(  "Enter a valid email"),
-  adminPassword: z.string().min(8,  "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(1,"Please confirm your password"),
-  term:          z.string().min(1,  "Select a term"),
-  session:       z.string().min(1,  "Enter the academic session"),
+  schoolName:      z.string().min(2,  "School name is required"),
+  schoolAddress:   z.string().min(5,  "Address is required"),
+  schoolPhone:     z.string().min(7,  "Phone number is required"),
+  principalName:   z.string().min(2,  "Principal name is required"),
+  adminEmail:      z.string().email(  "Enter a valid email"),
+  adminPassword:   z.string().min(8,  "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(1,  "Please confirm your password"),
 }).refine((d) => d.adminPassword === d.confirmPassword, {
   message: "Passwords do not match",
   path:    ["confirmPassword"],
 });
 
-// ── Data ─────────────────────────────────────────────────────
+type FormData = z.infer<typeof schema>;
+
+// ── Steps ─────────────────────────────────────────────────────
 
 const steps = [
-  { id: 1, label: "School details"  },
-  { id: 2, label: "Admin account"   },
-  { id: 3, label: "Academic setup"  },
-];
-
-const termOptions = [
-  { value: "First Term",  label: "First Term"  },
-  { value: "Second Term", label: "Second Term" },
-  { value: "Third Term",  label: "Third Term"  },
+  { id: 1, label: "School details" },
+  { id: 2, label: "Admin account"  },
 ];
 
 // ── Page ──────────────────────────────────────────────────────
 
 export default function SetupPage() {
-  const router = useRouter();
   const [step, setStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const setUser = useAuthStore((s) => s.setUser);
-const [serverError, setServerError] = useState<string | null>(null);
+  const register_ = useRegister();
 
   const {
     register,
     handleSubmit,
     trigger,
     formState: { errors },
-  } = useForm<SetupFormData>({
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
-    mode: "onBlur",
+    mode:     "onBlur",
   });
 
-  const stepFields: Record<number, (keyof SetupFormData)[]> = {
-    1: ["schoolName", "schoolAddress", "schoolPhone", "schoolEmail", "principalName"],
+  const stepFields: Record<number, (keyof FormData)[]> = {
+    1: ["schoolName", "schoolAddress", "schoolPhone", "principalName"],
     2: ["adminEmail", "adminPassword", "confirmPassword"],
-    3: ["term", "session"],
   };
 
   async function nextStep() {
     const valid = await trigger(stepFields[step]);
     if (valid) setStep((s) => s + 1);
   }
-async function onSubmit(data: SetupFormData) {
-    setIsSubmitting(true);
-    setServerError(null);
-    try {
-      const nameParts = data.principalName.trim().split(" ");
-      const firstName = nameParts[0];
-      const lastName  = nameParts.slice(1).join(" ") || "Admin";
 
-      const result = await registerAction({
-        firstName,
-        lastName,
-        email:        data.adminEmail,
-        password:     data.adminPassword,
-        schoolName:   data.schoolName,
-        currencyCode: "NGN",
-        address:      data.schoolAddress,
-        phone:        data.schoolPhone,
-      });
+  async function onSubmit(data: FormData) {
+    const nameParts = data.principalName.trim().split(" ");
+    const firstName = nameParts[0];
+    const lastName  = nameParts.slice(1).join(" ") || "Admin";
 
-      if (result.error) {
-        setServerError(result.error);
-        return;
-      }
-
-      if (result.user) setUser(result.user); 
-      router.push("/dashboard");
-    } finally {
-      setIsSubmitting(false);
-    }
+    register_.mutate({
+      firstName,
+      lastName,
+      email:        data.adminEmail,
+      password:     data.adminPassword,
+      schoolName:   data.schoolName,
+      currencyCode: "NGN",
+      address:      data.schoolAddress,
+      phone:        data.schoolPhone,
+    });
   }
 
   return (
@@ -145,17 +116,18 @@ async function onSubmit(data: SetupFormData) {
         ))}
       </div>
 
-      {serverError && (
-          <div className="p-3 bg-error-light border border-error rounded mb-4" role="alert">
-            <p className="text-sm text-error">{serverError}</p>
-          </div>
+      {register_.error && (
+        <div className="p-3 bg-error-light border border-error rounded mb-4" role="alert">
+          <p className="text-sm text-error">
+            {(register_.error as Error).message}
+          </p>
+        </div>
       )}
 
-      {/* Card */}
       <div className="bg-surface border border-border rounded-lg p-8">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
 
-          {/* Step 1 — School details */}
+          {/* Step 1 */}
           {step === 1 && (
             <div className="flex flex-col gap-5">
               <div className="mb-2">
@@ -180,24 +152,14 @@ async function onSubmit(data: SetupFormData) {
                 error={errors.schoolAddress?.message}
                 {...register("schoolAddress")}
               />
-              <div className="grid sm:grid-cols-2 gap-5">
-                <Input
-                  label="Phone number"
-                  type="tel"
-                  placeholder="+234 803 000 0000"
-                  required
-                  error={errors.schoolPhone?.message}
-                  {...register("schoolPhone")}
-                />
-                <Input
-                  label="School email"
-                  type="email"
-                  placeholder="info@school.edu.ng"
-                  required
-                  error={errors.schoolEmail?.message}
-                  {...register("schoolEmail")}
-                />
-              </div>
+              <Input
+                label="Phone number"
+                type="tel"
+                placeholder="+234 803 000 0000"
+                required
+                error={errors.schoolPhone?.message}
+                {...register("schoolPhone")}
+              />
               <Input
                 label="Principal's name"
                 placeholder="Dr. Chukwuemeka Adeyemi"
@@ -208,7 +170,7 @@ async function onSubmit(data: SetupFormData) {
             </div>
           )}
 
-          {/* Step 2 — Admin account */}
+          {/* Step 2 */}
           {step === 2 && (
             <div className="flex flex-col gap-5">
               <div className="mb-2">
@@ -243,36 +205,6 @@ async function onSubmit(data: SetupFormData) {
                 error={errors.confirmPassword?.message}
                 {...register("confirmPassword")}
               />
-            </div>
-          )}
-
-          {/* Step 3 — Academic setup */}
-          {step === 3 && (
-            <div className="flex flex-col gap-5">
-              <div className="mb-2">
-                <h1 className="text-lg font-semibold text-text-primary">
-                  Set up your academic calendar
-                </h1>
-                <p className="text-sm text-text-muted mt-1">
-                  You can change these at any time in Settings.
-                </p>
-              </div>
-              <Select
-                label="Current term"
-                required
-                options={termOptions}
-                placeholder="Select current term"
-                error={errors.term?.message}
-                {...register("term")}
-              />
-              <Input
-                label="Academic session"
-                placeholder="2024/2025"
-                required
-                hint="Format: 2024/2025"
-                error={errors.session?.message}
-                {...register("session")}
-              />
               <div className="p-4 bg-surface-secondary border border-border rounded-lg">
                 <p className="text-xs font-semibold text-text-primary mb-2">
                   What happens next
@@ -280,8 +212,8 @@ async function onSubmit(data: SetupFormData) {
                 <ul className="flex flex-col gap-1.5">
                   {[
                     "Your school dashboard will be created",
-                    "Default grade scales will be configured",
-                    "You can invite staff and add students",
+                    "You'll be on the Free plan — up to 3 students",
+                    "You can invite staff and add students immediately",
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-2 text-xs text-text-secondary">
                       <CheckCircle size={12} className="text-success shrink-0" />
@@ -293,13 +225,14 @@ async function onSubmit(data: SetupFormData) {
             </div>
           )}
 
-          {/* Navigation */}
+          {/* Nav */}
           <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-border">
             {step > 1 ? (
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setStep((s) => s - 1)}
+                disabled={register_.isPending}
               >
                 Back
               </Button>
@@ -311,7 +244,7 @@ async function onSubmit(data: SetupFormData) {
                 Continue
               </Button>
             ) : (
-              <Button type="submit" loading={isSubmitting}>
+              <Button type="submit" loading={register_.isPending}>
                 Complete setup
               </Button>
             )}

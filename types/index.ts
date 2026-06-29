@@ -1,385 +1,431 @@
-// ============================================================
-// GLOBAL / SHARED
-// ============================================================
+// ─────────────────────────────────────────────────────────────
+// SHARED PRIMITIVES
+// ─────────────────────────────────────────────────────────────
 
 export type Status = "active" | "inactive" | "pending" | "archived";
-
-
-export type UserRole =
-  | "super_admin"
-  | "admin"
-  | "teacher"
-  | "accountant"
-  | "parent";
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
-export interface ApiResponse<T> {
-  data: T;
-  message: string;
-  success: boolean;
-}
 
 export interface SelectOption {
   label: string;
   value: string;
 }
 
-// ============================================================
-// AUTH
-// ============================================================
-
-export interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: UserRole;
-  avatarUrl?: string;
-  schoolId: string;
-  createdAt: string;
-  lastLoginAt: string;
+export interface PaginatedResponse<T> {
+  data:       T[];
+  total:      number;
+  page:       number;
+  pageSize:   number;
+  totalPages: number;
 }
 
-export interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
+// Standard envelope the backend wraps every response in
+export interface ApiEnvelope<T> {
+  success:   boolean;
+  data:      T;
+  timestamp: string;
+}
+
+// Standard error shape the backend returns on non-2xx
+export interface ApiErrorBody {
+  statusCode: number;
+  message:    string | string[];
+  error:      string;
+  timestamp:  string;
+  path:       string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTH & USERS
+// ─────────────────────────────────────────────────────────────
+
+// Must stay in sync with the UserRole enum in the backend
+export type UserRole =
+  | "super_admin"
+  | "admin"
+  | "bursar"
+  | "teacher"
+  | "parent";
+
+export type InviteStatus = "pending" | "accepted";
+
+export type AuthProvider = "local" | "google";
+
+// The user object as it comes back from the API
+export interface User {
+  id:              string;
+  firstName:       string;
+  lastName:        string;
+  email:           string;
+  role:            UserRole;
+  schoolId:        string | null;
+  avatarUrl?:      string;
+  phoneNumber?:    string;
+  isActive:        boolean;
+  isEmailVerified: boolean;
+  inviteStatus:    InviteStatus | null;
+  authProvider:    AuthProvider;
+  createdAt:       string;
+  updatedAt:       string;
+  lastLoginAt?:     any;
 }
 
 export interface LoginCredentials {
-  email: string;
+  email:    string;
   password: string;
 }
 
-export interface SetupFormData {
-  schoolName: string;
-  schoolAddress: string;
-  schoolPhone: string;
-  schoolEmail: string;
-  principalName: string;
-  adminEmail: string;
-  adminPassword: string;
-  confirmPassword: string;
-  term: string;
-  session: string;
+export interface RegisterPayload {
+  firstName:    string;
+  lastName:     string;
+  email:        string;
+  password:     string;
+  schoolName:   string;
+  currencyCode: string;
+  address?:     string;
+  phone?:       string;
 }
 
-// ============================================================
+// What the backend returns on login / register / accept-invite
+export interface AuthResponse {
+  accessToken:  string;
+  refreshToken: string;
+  user:         User;
+}
+
+export interface TokenPair {
+  accessToken:  string;
+  refreshToken: string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // SCHOOL
-// ============================================================
+// ─────────────────────────────────────────────────────────────
 
 export interface School {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  logoUrl?: string;
-  currentTerm: string;
-  currentSession: string;
-  createdAt: string;
+  id:           string;
+  name:         string;
+  currencyCode: string;
+  adminEmail:   string;
+  logoUrl?:     string;
+  address?:     string;
+  phone?:       string;
+  isActive:     boolean;
+  createdAt:    string;
+  updatedAt:    string;
 }
 
-// ============================================================
+// ─────────────────────────────────────────────────────────────
+// SUBSCRIPTIONS & PLANS
+// ─────────────────────────────────────────────────────────────
+
+export type BillingCycle = "monthly" | "termly" | "annually";
+
+export type SubscriptionStatus = "pending" | "active" | "expired" | "cancelled";
+
+export interface Plan {
+  id:                 string;
+  name:               string;
+  slug:               string;
+  description?:       string;
+  priceKobo:          number;
+  billingCycle:       BillingCycle;
+  studentLimit:       number | null;
+  staffLimit:         number | null;
+  features:           string[];
+  highlights:         string[];
+  sortOrder:          number;
+  isActive:           boolean;
+  isCustom:           boolean;
+  paystackPlanCode?:  string;
+  createdAt:          string;
+  updatedAt:          string;
+}
+
+export interface Subscription {
+  id:                    string;
+  schoolId:              string;
+  planId:                string;
+  plan:                  Plan;
+  status:                SubscriptionStatus;
+  paystackReference?:    string;
+  paystackTransactionId?: string;
+  amountPaidKobo:        number;
+  startsAt?:             string;
+  expiresAt?:            string;
+  createdAt:             string;
+  updatedAt:             string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // STAFF
-// ============================================================
+// ─────────────────────────────────────────────────────────────
 
 export interface StaffMember {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  role: string;
-  subject?: string;
-  classAssigned?: string;
-  status: Status;
-  joinDate: string;
-  avatarUrl?: string;
+  id:           string;
+  firstName:    string;
+  lastName:     string;
+  email:        string;
+  role:         UserRole;
+  phoneNumber?: string;
+  isActive:     boolean;
+  inviteStatus: InviteStatus | null;
+  schoolId:     string;
+  createdAt:    string;
 }
 
-export interface DutyAssignment {
-  id: string;
-  staffId: string;
-  staffName: string;
-  dutyType: DutyType;
-  location: string;
-  dayOfWeek: DayOfWeek;
-  startTime: string;
-  endTime: string;
-  term: string;
-  session: string;
+export interface StaffAssignment {
+  id:            string;
+  userId:        string;
+  user:          StaffMember;
+  classId:       string;
+  class:         ClassSection;
+  isClassTeacher: boolean;
+  subjects:      Subject[];
+  createdAt:     string;
+  updatedAt:     string;
 }
 
-export type DutyType =
-  | "morning_assembly"
-  | "gate_duty"
-  | "cafeteria"
-  | "exam_supervision"
-  | "extracurricular"
-  | "sanitation"
-  | "library";
-
-export type DayOfWeek =
-  | "monday"
-  | "tuesday"
-  | "wednesday"
-  | "thursday"
-  | "friday";
-
-// ============================================================
-// STUDENTS
-// ============================================================
-
-export interface Student {
-  id: string;
-  firstName: string;
-  lastName: string;
-  admissionNumber: string;
-  classId: string;
-  className: string;
-  sectionId?: string;
-  sectionName?: string;
-  gender: "male" | "female";
-  dateOfBirth: string;
-  parentName: string;
-  parentPhone: string;
-  parentEmail: string;
-  address: string;
-  status: Status;
-  admissionDate: string;
-  avatarUrl?: string;
+export interface InviteStaffPayload {
+  firstName:    string;
+  lastName:     string;
+  email:        string;
+  role:         "teacher" | "bursar" | "admin";
+  phoneNumber?: string;
+  schoolId:     string;
 }
 
-export interface ScrapedStudentResult {
-  studentName: string;
-  admissionNumber: string;
-  subjects: ScrapedSubjectResult[];
-  totalScore: number;
-  average: number;
-  grade: string;
-  position: number;
-  term: string;
-  session: string;
+export interface AssignStaffPayload {
+  userId:        string;
+  classId:       string;
+  isClassTeacher?: boolean;
+  subjectIds?:   string[];
 }
 
-export interface ScrapedSubjectResult {
-  subject: string;
-  ca: number;
-  exam: number;
-  total: number;
-  grade: string;
-  remark: string;
+// ─────────────────────────────────────────────────────────────
+// CLASSES & SUBJECTS
+// ─────────────────────────────────────────────────────────────
+
+export interface ClassSection {
+  id:          string;
+  name:        string;
+  description?: string;
+  schoolId:    string;
+  createdAt:   string;
+  updatedAt:   string;
 }
-
-// ============================================================
-// CLASSES & SECTIONS
-// ============================================================
-
-export interface Class {
-  id: string;
-  name: string;
-  level: number;
-  sections: Section[];
-  studentCount: number;
-  formTeacherId?: string;
-  formTeacherName?: string;
-}
-
-export interface Section {
-  id: string;
-  classId: string;
-  name: string;
-  studentCount: number;
-  formTeacherId?: string;
-  formTeacherName?: string;
-}
-
-// ============================================================
-// ACADEMICS & RESULTS
-// ============================================================
 
 export interface Subject {
-  id: string;
-  name: string;
-  code: string;
-  classIds: string[];
-  teacherId?: string;
-  teacherName?: string;
+  id:           string;
+  name:         string;
+  description?: string;
+  maxCaScore:   number;
+  maxExamScore: number;
+  classId:      string;
+  schoolId:     string;
+  createdAt:    string;
+  updatedAt:    string;
 }
 
-export interface Result {
-  id: string;
+// ─────────────────────────────────────────────────────────────
+// STUDENTS
+// ─────────────────────────────────────────────────────────────
+
+export type Gender     = "male" | "female" | "other";
+export type BloodGroup = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
+
+export interface Student {
+  id:                     string;
+  firstName:              string;
+  middleName?:            string;
+  lastName:               string;
+  admissionNumber?:       string;
+  dateOfBirth?:           string;
+  gender?:                Gender;
+  bloodGroup?:            BloodGroup;
+  nationality?:           string;
+  stateOfOrigin?:         string;
+  religion?:              string;
+  photoUrl?:              string;
+  addressLine1?:          string;
+  addressLine2?:          string;
+  city?:                  string;
+  state?:                 string;
+  country?:               string;
+  allergies?:             string;
+  medicalConditions?:     string;
+  emergencyContact?:      string;
+  parentEmail:            string;
+  parentPhone:            string;
+  parentName?:            string;
+  parentRelationship?:    string;
+  secondaryGuardianName?: string;
+  secondaryGuardianPhone?: string;
+  admissionDate?:         string;
+  previousSchool?:        string;
+  schoolId:               string;
+  classId?:               string;
+  class?:                 ClassSection;
+  isActive:               boolean;
+  createdAt:              string;
+  updatedAt:              string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ATTENDANCE
+// ─────────────────────────────────────────────────────────────
+
+export type AttendanceStatus = "present" | "absent" | "late";
+
+export interface AttendanceRecord {
+  id:        string;
   studentId: string;
-  studentName: string;
-  admissionNumber: string;
-  classId: string;
-  className: string;
-  subjectId: string;
-  subjectName: string;
-  ca: number;
-  exam: number;
-  total: number;
-  grade: string;
-  remark: string;
-  term: string;
-  session: string;
-  publishedAt?: string;
+  student:   Student;
+  classId:   string;
+  status:    AttendanceStatus;
+  date:      string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface GradeScale {
-  id: string;
-  label: string;
+export interface AttendanceEntry {
+  studentId: string;
+  status:    AttendanceStatus;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCORES & GRADING
+// ─────────────────────────────────────────────────────────────
+
+export type ScoreTerm = "first" | "second" | "third";
+
+export interface Score {
+  id:          string;
+  studentId:   string;
+  student:     Student;
+  subjectId:   string;
+  subject:     Subject;
+  caScore:     number;
+  examScore:   number;
+  totalScore:  number;
+  grade:       string;
+  term:        ScoreTerm;
+  academicYear: string;
+  createdAt:   string;
+  updatedAt:   string;
+}
+
+export interface GradeBand {
+  grade:    string;
   minScore: number;
   maxScore: number;
-  remark: string;
+  remark?:  string;
 }
 
-// ============================================================
-// COLLECTIONS / FEES
-// ============================================================
+export interface GradingScheme {
+  id:          string;
+  name:        string;
+  description?: string;
+  bands:       GradeBand[];
+  isDefault:   boolean;
+  schoolId:    string;
+  createdAt:   string;
+  updatedAt:   string;
+}
 
-export type PaymentStatus = "paid" | "partial" | "unpaid" | "waived";
-export type PaymentMethod = "cash" | "bank_transfer" | "pos" | "online";
+// ─────────────────────────────────────────────────────────────
+// REPORTS
+// ─────────────────────────────────────────────────────────────
 
-export interface FeeCategory {
-  id: string;
-  name: string;
+export type ReportStatus = "draft" | "published";
+
+export interface Report {
+  id:             string;
+  studentId:      string;
+  student:        Student;
+  classId:        string;
+  class:          ClassSection;
+  term:           ScoreTerm;
+  academicYear:   string;
+  average:        number;
+  position?:      number;
+  teacherComment?: string;
+  conduct?:       number;
+  punctuality?:   number;
+  neatness?:      number;
+  status:         ReportStatus;
+  createdAt:      string;
+  updatedAt:      string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// FEES & PAYMENTS
+// ─────────────────────────────────────────────────────────────
+
+export type PaymentStatus = "defaulter" | "partially_paid" | "paid";
+
+export interface LineItem {
+  label:  string;
   amount: number;
-  term: string;
-  session: string;
-  classIds: string[];
-  dueDate: string;
+}
+
+export interface FeeInvoice {
+  id:            string;
+  studentId:     string;
+  student:       Student;
+  schoolId:      string;
+  termLabel:     string;
+  totalAmount:   number;
+  amountPaid:    number;
+  balance:       number;
+  paymentStatus: PaymentStatus;
+  lineItems?:    LineItem[];
+  createdAt:     string;
+  updatedAt:     string;
 }
 
 export interface Payment {
-  id: string;
-  studentId: string;
-  studentName: string;
-  admissionNumber: string;
-  className: string;
-  feeCategoryId: string;
-  feeCategoryName: string;
-  amountDue: number;
-  amountPaid: number;
-  balance: number;
-  status: PaymentStatus;
-  method?: PaymentMethod;
-  paidAt?: string;
-  receiptNumber?: string;
-  term: string;
-  session: string;
+  id:            string;
+  receiptNumber: string;
+  invoiceId:     string;
+  invoice:       FeeInvoice;
+  amount:        number;
+  percentagePaid: number;
+  balanceAfter:  number;
+  paymentMethod?: string;
+  reference?:    string;
+  recordedBy?:   string;
+  note?:         string;
+  createdAt:     string;
 }
 
-export interface ReminderConfig {
-  id: string;
-  feeCategoryId: string;
-  feeCategoryName: string;
-  channel: "sms" | "email" | "both";
-  triggerDaysBefore: number;
-  message: string;
-  isActive: boolean;
+export interface FeeDashboardMetrics {
+  totalExpected:  number;
+  totalSecured:   number;
+  totalDebt:      number;
+  paidCount:      number;
+  partialCount:   number;
+  defaulterCount: number;
 }
 
-// ============================================================
-// COMMUNICATION
-// ============================================================
-
-export type MessageChannel = "sms" | "email" | "push";
-export type MessageStatus = "draft" | "sent" | "failed" | "scheduled";
-
-export interface Message {
-  id: string;
-  subject: string;
-  body: string;
-  channel: MessageChannel;
-  recipients: MessageRecipient[];
-  recipientCount: number;
-  status: MessageStatus;
-  scheduledAt?: string;
-  sentAt?: string;
-  createdBy: string;
-  createdAt: string;
+export interface DunningConfig {
+  id:            string;
+  schoolId:      string;
+  enabled:       boolean;
+  daysBeforeExam: number;
+  emailTemplate?: string;
+  createdAt:     string;
+  updatedAt:     string;
 }
 
-export interface MessageRecipient {
-  type: "all" | "class" | "individual";
-  classId?: string;
-  studentIds?: string[];
-}
-
-// ============================================================
-// DASHBOARD METRICS
-// ============================================================
-
-export interface DashboardMetrics {
-  totalStudents: number;
-  totalStaff: number;
-  collectionRate: number;
-  pendingFees: number;
-  activeClasses: number;
-  recentPayments: Payment[];
-  attendanceSummary: AttendanceSummary;
-  feeCollectionByMonth: MonthlyCollection[];
-}
-
-export interface AttendanceSummary {
-  present: number;
-  absent: number;
-  late: number;
-  total: number;
-}
-
-export interface MonthlyCollection {
-  month: string;
-  collected: number;
-  expected: number;
-}
-
-// ============================================================
-// SETTINGS
-// ============================================================
-
-export interface SchoolSettings {
-  school: School;
-  gradeScales: GradeScale[];
-  terms: TermConfig[];
-  notificationPreferences: NotificationPreferences;
-}
-
-export interface TermConfig {
-  id: string;
-  name: string;
-  session: string;
-  startDate: string;
-  endDate: string;
-  isCurrent: boolean;
-}
-
-export interface NotificationPreferences {
-  emailOnPayment: boolean;
-  smsOnPayment: boolean;
-  emailOnResult: boolean;
-  reminderLeadDays: number;
-}
-
-// ============================================================
-// CONTACT / PUBLIC FORMS
-// ============================================================
+// ─────────────────────────────────────────────────────────────
+// CONTACT / PUBLIC
+// ─────────────────────────────────────────────────────────────
 
 export interface ContactFormData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
+  firstName:   string;
+  lastName:    string;
+  email:       string;
+  phone?:      string;
   schoolName?: string;
-  message: string;
-  subject: string;
+  message:     string;
+  subject:     string;
 }
