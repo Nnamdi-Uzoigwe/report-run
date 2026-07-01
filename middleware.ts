@@ -15,6 +15,7 @@ const PUBLIC_PATHS = new Set([
   "/reset-password",
   "/accept-invite",
   "/email-verified",
+  "/pay",
 ]);
 
 // Paths that authenticated users should be bounced away from

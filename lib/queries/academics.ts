@@ -2,7 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  getActiveSession,
+  getDailySummary,
   getAttendance,
+  getAttendanceStats,
   submitAttendance,
   getScoresBySubject,
   getScoresByStudent,
@@ -13,17 +16,41 @@ import {
   publishReports,
 } from "@/lib/api";
 import { keys } from "./keys";
-import type { AttendanceEntry, ScoreTerm } from "@/types";
-
+import type { AttendanceEntry, AttendanceRecord, ScoreTerm } from "@/types";
 // ─────────────────────────────────────────────────────────────
 // ATTENDANCE
 // ─────────────────────────────────────────────────────────────
 
-export function useAttendance(classId: string, date: string) {
+export function useActiveSession() {
   return useQuery({
-    queryKey: keys.attendance.byClassAndDate(classId, date),
-    queryFn:  () => getAttendance(classId, date),
+    queryKey: keys.attendance.activeSession(),
+    queryFn:  getActiveSession,
+    // Refetch every minute so the session auto-switches at 11am
+    refetchInterval: 60 * 1000,
+    staleTime:       30 * 1000,
+  });
+}
+
+export function useDailySummary(classId: string, date: string) {
+  return useQuery({
+    queryKey: keys.attendance.daily(classId, date),
+    queryFn:  () => getDailySummary(classId, date),
     enabled:  !!classId && !!date,
+  });
+}
+
+export const EMPTY_ATTENDANCE: AttendanceRecord[] = []; // declare once, outside the hook
+
+export function useSessionAttendance(
+  classId: string,
+  date:    string,
+  session: "morning" | "afternoon" | undefined,
+) {
+  return useQuery({
+    queryKey:        keys.attendance.bySession(classId, date, session ?? ""),
+    queryFn:         () => getAttendance(classId, date, session!),
+    enabled:         !!classId && !!date && !!session,
+    placeholderData: EMPTY_ATTENDANCE,   // <-- add this line
   });
 }
 
@@ -33,17 +60,36 @@ export function useSubmitAttendance() {
   return useMutation({
     mutationFn: (data: {
       classId: string;
-      date: string;
+      date:    string;
+      session?: "morning" | "afternoon";
       entries: AttendanceEntry[];
     }) => submitAttendance(data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: keys.attendance.byClassAndDate(
-          variables.classId,
-          variables.date
-        ),
+        queryKey: keys.attendance.daily(variables.classId, variables.date),
       });
+      if (variables.session) {
+        queryClient.invalidateQueries({
+          queryKey: keys.attendance.bySession(
+            variables.classId,
+            variables.date,
+            variables.session,
+          ),
+        });
+      }
     },
+  });
+}
+
+export function useAttendanceStats(
+  classId: string,
+  from:    string,
+  to:      string,
+) {
+  return useQuery({
+    queryKey: keys.attendance.stats(classId, from, to),
+    queryFn:  () => getAttendanceStats(classId, from, to),
+    enabled:  !!classId && !!from && !!to,
   });
 }
 

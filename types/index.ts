@@ -65,7 +65,6 @@ export interface User {
   authProvider:    AuthProvider;
   createdAt:       string;
   updatedAt:       string;
-  lastLoginAt?:     any;
 }
 
 export interface LoginCredentials {
@@ -360,11 +359,30 @@ export interface Report {
 // FEES & PAYMENTS
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// FEES & PAYMENTS
+// ─────────────────────────────────────────────────────────────
+
 export type PaymentStatus = "defaulter" | "partially_paid" | "paid";
+export type PaymentMethod = "cash" | "bank_transfer" | "pos" | "paystack";
 
 export interface LineItem {
   label:  string;
   amount: number;
+}
+
+export interface FeeTemplate {
+  id:          string;
+  schoolId:    string;
+  classId?:    string;
+  class?:      ClassSection;
+  termLabel:   string;
+  lineItems:   LineItem[];
+  totalAmount: number;
+  description?: string;
+  isActive:    boolean;
+  createdAt:   string;
+  updatedAt:   string;
 }
 
 export interface FeeInvoice {
@@ -372,29 +390,32 @@ export interface FeeInvoice {
   studentId:     string;
   student:       Student;
   schoolId:      string;
+  templateId?:   string;
+  template?:     FeeTemplate;
   termLabel:     string;
   totalAmount:   number;
   amountPaid:    number;
   balance:       number;
   paymentStatus: PaymentStatus;
   lineItems?:    LineItem[];
+  portalToken?:  string;
   createdAt:     string;
   updatedAt:     string;
 }
 
 export interface Payment {
-  id:            string;
-  receiptNumber: string;
-  invoiceId:     string;
-  invoice:       FeeInvoice;
-  amount:        number;
-  percentagePaid: number;
-  balanceAfter:  number;
-  paymentMethod?: string;
-  reference?:    string;
-  recordedBy?:   string;
-  note?:         string;
-  createdAt:     string;
+  id:                     string;
+  receiptNumber:          string;
+  invoiceId:              string;
+  invoice:                FeeInvoice;
+  amount:                 number;
+  balanceAfter:           number;
+  paymentMethod:          PaymentMethod;
+  reference?:             string;
+  paystackTransactionId?: string;
+  recordedBy?:            string;
+  note?:                  string;
+  createdAt:              string;
 }
 
 export interface FeeDashboardMetrics {
@@ -407,13 +428,13 @@ export interface FeeDashboardMetrics {
 }
 
 export interface DunningConfig {
-  id:            string;
-  schoolId:      string;
-  enabled:       boolean;
+  id:             string;
+  schoolId:       string;
+  enabled:        boolean;
   daysBeforeExam: number;
   emailTemplate?: string;
-  createdAt:     string;
-  updatedAt:     string;
+  createdAt:      string;
+  updatedAt:      string;
 }
 
 // ─────────────────────────────────────────────────────────────

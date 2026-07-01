@@ -2,14 +2,14 @@
  * lib/api.ts
  *
  * Domain-level API functions. Every function here is a thin wrapper around
- * authFetch / publicFetch from lib/fetcher.ts. No business logic lives here —
- * just the mapping between frontend call sites and backend endpoints.
+ * clientFetch from lib/client-fetch.ts. These run in the browser directly —
+ * no Next.js server action routing.
  *
- * All functions are async and throw ApiError on failure.
- * Callers (TanStack Query hooks) are responsible for error handling.
+ * For auth actions that need to write cookies (login, logout, register),
+ * use lib/actions/auth.ts instead.
  */
 
-import { authFetch, publicFetch } from "@/lib/fetcher";
+import { clientFetch } from "@/lib/client-fetch";
 import type {
   User,
   School,
@@ -28,8 +28,11 @@ import type {
   ScoreTerm,
   GradingScheme,
   Report,
+  FeeTemplate,
   FeeInvoice,
+  LineItem,
   Payment,
+  PaymentMethod,
   FeeDashboardMetrics,
   DunningConfig,
 } from "@/types";
@@ -39,14 +42,14 @@ import type {
 // ─────────────────────────────────────────────────────────────
 
 export async function getSchool(schoolId: string): Promise<School> {
-  return authFetch<School>(`/schools/${schoolId}`);
+  return clientFetch<School>(`/schools/${schoolId}`);
 }
 
 export async function updateSchool(
   schoolId: string,
   data: Partial<Pick<School, "name" | "address" | "phone">>
 ): Promise<School> {
-  return authFetch<School>(`/schools/${schoolId}`, {
+  return clientFetch<School>(`/schools/${schoolId}`, {
     method: "PATCH",
     body: data,
   });
@@ -59,7 +62,7 @@ export async function uploadSchoolLogo(
   // Logo upload is multipart — bypass the JSON body helper
   const form = new FormData();
   form.append("logo", file);
-  return authFetch<School>(`/schools/${schoolId}/logo`, {
+  return clientFetch<School>(`/schools/${schoolId}/logo`, {
     method: "PATCH",
     body: form as unknown as Record<string, unknown>,
   });
@@ -70,13 +73,13 @@ export async function uploadSchoolLogo(
 // ─────────────────────────────────────────────────────────────
 
 export async function getPlans(): Promise<Plan[]> {
-  return publicFetch<Plan[]>("/subscriptions/plans");
+  return clientFetch<Plan[]>("/subscriptions/plans");
 }
 
 export async function getActiveSubscription(
   schoolId: string
 ): Promise<Subscription | null> {
-  return authFetch<Subscription | null>(
+  return clientFetch<Subscription | null>(
     `/subscriptions/school/${schoolId}/active`
   );
 }
@@ -84,7 +87,7 @@ export async function getActiveSubscription(
 export async function getSubscriptionHistory(
   schoolId: string
 ): Promise<Subscription[]> {
-  return authFetch<Subscription[]>(
+  return clientFetch<Subscription[]>(
     `/subscriptions/school/${schoolId}/history`
   );
 }
@@ -93,7 +96,7 @@ export async function initiateSubscription(
   planId: string,
   schoolId: string
 ): Promise<{ authorizationUrl: string; reference: string }> {
-  return authFetch("/subscriptions/initiate", {
+  return clientFetch("/subscriptions/initiate", {
     method: "POST",
     body: { planId, schoolId },
   });
@@ -104,17 +107,17 @@ export async function initiateSubscription(
 // ─────────────────────────────────────────────────────────────
 
 export async function getMe(): Promise<User> {
-  return authFetch<User>("/users/me");
+  return clientFetch<User>("/users/me");
 }
 
 export async function getSchoolUsers(schoolId: string): Promise<User[]> {
-  return authFetch<User[]>(`/users/school/${schoolId}`);
+  return clientFetch<User[]>(`/users/school/${schoolId}`);
 }
 
 export async function inviteUser(
   data: InviteStaffPayload
 ): Promise<{ message: string; user: StaffMember }> {
-  return authFetch("/users/invite", {
+  return clientFetch("/users/invite", {
     method: "POST",
     body: data,
   });
@@ -123,18 +126,18 @@ export async function inviteUser(
 export async function resendInvite(
   userId: string
 ): Promise<{ message: string }> {
-  return authFetch(`/users/${userId}/resend-invite`, { method: "POST" });
+  return clientFetch(`/users/${userId}/resend-invite`, { method: "POST" });
 }
 
 export async function deactivateUser(userId: string): Promise<User> {
-  return authFetch<User>(`/users/${userId}`, { method: "DELETE" });
+  return clientFetch<User>(`/users/${userId}`, { method: "DELETE" });
 }
 
 export async function updateUser(
   userId: string,
   data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber">>
 ): Promise<User> {
-  return authFetch<User>(`/users/${userId}`, {
+  return clientFetch<User>(`/users/${userId}`, {
     method: "PATCH",
     body: data,
   });
@@ -147,7 +150,7 @@ export async function updateUser(
 export async function assignStaff(
   data: AssignStaffPayload
 ): Promise<StaffAssignment> {
-  return authFetch<StaffAssignment>("/staff/assign", {
+  return clientFetch<StaffAssignment>("/staff/assign", {
     method: "POST",
     body: data,
   });
@@ -156,17 +159,17 @@ export async function assignStaff(
 export async function getAssignmentsByClass(
   classId: string
 ): Promise<StaffAssignment[]> {
-  return authFetch<StaffAssignment[]>(`/staff/by-class?classId=${classId}`);
+  return clientFetch<StaffAssignment[]>(`/staff/by-class?classId=${classId}`);
 }
 
 export async function getAssignmentsByUser(
   userId: string
 ): Promise<StaffAssignment[]> {
-  return authFetch<StaffAssignment[]>(`/staff/by-user?userId=${userId}`);
+  return clientFetch<StaffAssignment[]>(`/staff/by-user?userId=${userId}`);
 }
 
 export async function removeAssignment(assignmentId: string): Promise<void> {
-  return authFetch(`/staff/${assignmentId}`, { method: "DELETE" });
+  return clientFetch(`/staff/${assignmentId}`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -174,7 +177,7 @@ export async function removeAssignment(assignmentId: string): Promise<void> {
 // ─────────────────────────────────────────────────────────────
 
 export async function getClasses(schoolId: string): Promise<ClassSection[]> {
-  return authFetch<ClassSection[]>(`/classes?schoolId=${schoolId}`);
+  return clientFetch<ClassSection[]>(`/classes?schoolId=${schoolId}`);
 }
 
 export async function createClass(data: {
@@ -182,7 +185,7 @@ export async function createClass(data: {
   description?: string;
   schoolId: string;
 }): Promise<ClassSection> {
-  return authFetch<ClassSection>("/classes", {
+  return clientFetch<ClassSection>("/classes", {
     method: "POST",
     body: data,
   });
@@ -192,14 +195,14 @@ export async function updateClass(
   classId: string,
   data: Partial<Pick<ClassSection, "name" | "description">>
 ): Promise<ClassSection> {
-  return authFetch<ClassSection>(`/classes/${classId}`, {
+  return clientFetch<ClassSection>(`/classes/${classId}`, {
     method: "PATCH",
     body: data,
   });
 }
 
 export async function deleteClass(classId: string): Promise<void> {
-  return authFetch(`/classes/${classId}`, { method: "DELETE" });
+  return clientFetch(`/classes/${classId}`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -207,7 +210,7 @@ export async function deleteClass(classId: string): Promise<void> {
 // ─────────────────────────────────────────────────────────────
 
 export async function getSubjects(classId: string): Promise<Subject[]> {
-  return authFetch<Subject[]>(`/subjects?classId=${classId}`);
+  return clientFetch<Subject[]>(`/subjects?classId=${classId}`);
 }
 
 export async function createSubject(data: {
@@ -218,7 +221,7 @@ export async function createSubject(data: {
   maxExamScore?: number;
   description?: string;
 }): Promise<Subject> {
-  return authFetch<Subject>("/subjects", {
+  return clientFetch<Subject>("/subjects", {
     method: "POST",
     body: data,
   });
@@ -228,14 +231,14 @@ export async function updateSubject(
   subjectId: string,
   data: Partial<Pick<Subject, "name" | "maxCaScore" | "maxExamScore" | "description">>
 ): Promise<Subject> {
-  return authFetch<Subject>(`/subjects/${subjectId}`, {
+  return clientFetch<Subject>(`/subjects/${subjectId}`, {
     method: "PATCH",
     body: data,
   });
 }
 
 export async function deleteSubject(subjectId: string): Promise<void> {
-  return authFetch(`/subjects/${subjectId}`, { method: "DELETE" });
+  return clientFetch(`/subjects/${subjectId}`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -245,7 +248,7 @@ export async function deleteSubject(subjectId: string): Promise<void> {
 export async function getGradingSchemes(
   schoolId: string
 ): Promise<GradingScheme[]> {
-  return authFetch<GradingScheme[]>(`/grading?schoolId=${schoolId}`);
+  return clientFetch<GradingScheme[]>(`/grading?schoolId=${schoolId}`);
 }
 
 export async function createGradingScheme(data: {
@@ -255,7 +258,7 @@ export async function createGradingScheme(data: {
   isDefault?: boolean;
   description?: string;
 }): Promise<GradingScheme> {
-  return authFetch<GradingScheme>("/grading", {
+  return clientFetch<GradingScheme>("/grading", {
     method: "POST",
     body: data,
   });
@@ -264,13 +267,13 @@ export async function createGradingScheme(data: {
 export async function setDefaultGradingScheme(
   schemeId: string
 ): Promise<GradingScheme> {
-  return authFetch<GradingScheme>(`/grading/${schemeId}/set-default`, {
+  return clientFetch<GradingScheme>(`/grading/${schemeId}/set-default`, {
     method: "PATCH",
   });
 }
 
 export async function deleteGradingScheme(schemeId: string): Promise<void> {
-  return authFetch(`/grading/${schemeId}`, { method: "DELETE" });
+  return clientFetch(`/grading/${schemeId}`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -283,17 +286,17 @@ export async function getStudents(
 ): Promise<Student[]> {
   const params = new URLSearchParams({ schoolId });
   if (classId) params.set("classId", classId);
-  return authFetch<Student[]>(`/students?${params.toString()}`);
+  return clientFetch<Student[]>(`/students?${params.toString()}`);
 }
 
 export async function getStudent(studentId: string): Promise<Student> {
-  return authFetch<Student>(`/students/${studentId}`);
+  return clientFetch<Student>(`/students/${studentId}`);
 }
 
 export async function createStudent(
   data: Omit<Student, "id" | "createdAt" | "updatedAt" | "class" | "isActive">
 ): Promise<Student> {
-  return authFetch<Student>("/students", {
+  return clientFetch<Student>("/students", {
     method: "POST",
     body: data,
   });
@@ -303,14 +306,14 @@ export async function updateStudent(
   studentId: string,
   data: Partial<Student>
 ): Promise<Student> {
-  return authFetch<Student>(`/students/${studentId}`, {
+  return clientFetch<Student>(`/students/${studentId}`, {
     method: "PATCH",
     body: data,
   });
 }
 
 export async function deactivateStudent(studentId: string): Promise<Student> {
-  return authFetch<Student>(`/students/${studentId}`, { method: "DELETE" });
+  return clientFetch<Student>(`/students/${studentId}`, { method: "DELETE" });
 }
 
 export async function previewExcelImport(
@@ -318,7 +321,7 @@ export async function previewExcelImport(
 ): Promise<Partial<Student>[]> {
   const form = new FormData();
   form.append("file", file);
-  return authFetch<Partial<Student>[]>("/students/import/excel/preview", {
+  return clientFetch<Partial<Student>[]>("/students/import/excel/preview", {
     method: "POST",
     body: form as unknown as Record<string, unknown>,
   });
@@ -328,7 +331,7 @@ export async function confirmStudentImport(
   schoolId: string,
   students: Partial<Student>[]
 ): Promise<{ imported: number }> {
-  return authFetch<{ imported: number }>("/students/import/confirm", {
+  return clientFetch<{ imported: number }>("/students/import/confirm", {
     method: "POST",
     body: { schoolId, students },
   });
@@ -338,24 +341,109 @@ export async function confirmStudentImport(
 // ATTENDANCE
 // ─────────────────────────────────────────────────────────────
 
+export interface ActiveSessionInfo {
+  session:         "morning" | "afternoon";
+  isMorningLocked: boolean;
+  currentHour:     number;
+  morningClosesAt: number;
+}
+
+export interface DailyAttendanceSummary {
+  studentId:  string;
+  student:    Student;
+  morning?:   AttendanceRecord;
+  afternoon?: AttendanceRecord;
+}
+
+export async function getActiveSession(): Promise<ActiveSessionInfo> {
+  return clientFetch<ActiveSessionInfo>("/attendance/session/active");
+}
+
+export async function getDailySummary(
+  classId: string,
+  date: string,
+): Promise<DailyAttendanceSummary[]> {
+  // Fetch both sessions in parallel and merge on the frontend.
+  // Once the backend /attendance/daily endpoint is deployed this can be
+  // replaced with a single call to that endpoint.
+  const [morning, afternoon] = await Promise.all([
+    clientFetch<AttendanceRecord[]>(
+      `/attendance?classId=${classId}&date=${date}&session=morning`,
+    ).catch(() => [] as AttendanceRecord[]),
+    clientFetch<AttendanceRecord[]>(
+      `/attendance?classId=${classId}&date=${date}&session=afternoon`,
+    ).catch(() => [] as AttendanceRecord[]),
+  ]);
+
+  const map = new Map<string, DailyAttendanceSummary>();
+
+  for (const record of morning) {
+    map.set(record.studentId, {
+      studentId: record.studentId,
+      student:   record.student,
+      morning:   record,
+    });
+  }
+
+  for (const record of afternoon) {
+    if (map.has(record.studentId)) {
+      map.get(record.studentId)!.afternoon = record;
+    } else {
+      map.set(record.studentId, {
+        studentId: record.studentId,
+        student:   record.student,
+        afternoon: record,
+      });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) =>
+    a.student.lastName.localeCompare(b.student.lastName),
+  );
+}
+
 export async function getAttendance(
   classId: string,
-  date: string
+  date: string,
+  session: "morning" | "afternoon",
 ): Promise<AttendanceRecord[]> {
-  return authFetch<AttendanceRecord[]>(
-    `/attendance?classId=${classId}&date=${date}`
+  return clientFetch<AttendanceRecord[]>(
+    `/attendance?classId=${classId}&date=${date}&session=${session}`,
   );
 }
 
 export async function submitAttendance(data: {
   classId: string;
   date: string;
+  session?: "morning" | "afternoon";
   entries: AttendanceEntry[];
-}): Promise<{ saved: number }> {
-  return authFetch<{ saved: number }>("/attendance", {
+}): Promise<{ saved: number; session: string }> {
+  // Strip session from the body — the backend auto-detects it from server time.
+  // Remove this once the updated DTO is deployed and verified.
+  const { session: _session, ...rest } = data;
+  return clientFetch<{ saved: number; session: string }>("/attendance", {
     method: "POST",
-    body: data,
+    body: rest,
   });
+}
+
+export async function getAttendanceStats(
+  classId: string,
+  from: string,
+  to: string,
+): Promise<
+  {
+    studentId:        string;
+    morningPresent:   number;
+    morningAbsent:    number;
+    morningLate:      number;
+    afternoonPresent: number;
+    afternoonAbsent:  number;
+    afternoonLate:    number;
+  }[]
+> {
+  const params = new URLSearchParams({ classId, from, to });
+  return clientFetch(`/attendance/stats?${params.toString()}`);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -368,7 +456,7 @@ export async function getScoresBySubject(
   academicYear: string
 ): Promise<Score[]> {
   const params = new URLSearchParams({ subjectId, term, academicYear });
-  return authFetch<Score[]>(`/scores/by-subject?${params.toString()}`);
+  return clientFetch<Score[]>(`/scores/by-subject?${params.toString()}`);
 }
 
 export async function getScoresByStudent(
@@ -377,7 +465,7 @@ export async function getScoresByStudent(
   academicYear: string
 ): Promise<Score[]> {
   const params = new URLSearchParams({ studentId, term, academicYear });
-  return authFetch<Score[]>(`/scores/by-student?${params.toString()}`);
+  return clientFetch<Score[]>(`/scores/by-student?${params.toString()}`);
 }
 
 export async function submitScores(data: {
@@ -386,7 +474,7 @@ export async function submitScores(data: {
   academicYear: string;
   entries: { studentId: string; caScore: number; examScore: number }[];
 }): Promise<{ saved: number }> {
-  return authFetch<{ saved: number }>("/scores", {
+  return clientFetch<{ saved: number }>("/scores", {
     method: "POST",
     body: data,
   });
@@ -402,7 +490,7 @@ export async function getReports(
   academicYear: string
 ): Promise<Report[]> {
   const params = new URLSearchParams({ classId, term, academicYear });
-  return authFetch<Report[]>(`/reports?${params.toString()}`);
+  return clientFetch<Report[]>(`/reports?${params.toString()}`);
 }
 
 export async function generateReports(data: {
@@ -410,7 +498,7 @@ export async function generateReports(data: {
   term: ScoreTerm;
   academicYear: string;
 }): Promise<{ generated: number }> {
-  return authFetch<{ generated: number }>("/reports/generate", {
+  return clientFetch<{ generated: number }>("/reports/generate", {
     method: "POST",
     body: data,
   });
@@ -425,7 +513,7 @@ export async function updateReportTeacherInput(
     neatness?: number;
   }
 ): Promise<Report> {
-  return authFetch<Report>(`/reports/${reportId}/teacher-input`, {
+  return clientFetch<Report>(`/reports/${reportId}/teacher-input`, {
     method: "PATCH",
     body: data,
   });
@@ -437,7 +525,7 @@ export async function publishReports(
   academicYear: string
 ): Promise<{ published: number }> {
   const params = new URLSearchParams({ classId, term, academicYear });
-  return authFetch<{ published: number }>(
+  return clientFetch<{ published: number }>(
     `/reports/publish?${params.toString()}`,
     { method: "POST" }
   );
@@ -447,58 +535,89 @@ export async function publishReports(
 // FEES & PAYMENTS
 // ─────────────────────────────────────────────────────────────
 
+// ── Templates ─────────────────────────────────────────────────
+
+export async function getFeeTemplates(schoolId: string): Promise<FeeTemplate[]> {
+  return clientFetch<FeeTemplate[]>(`/fees/templates?schoolId=${schoolId}`);
+}
+
+export async function createFeeTemplate(data: {
+  schoolId:    string;
+  classId?:    string;
+  termLabel:   string;
+  lineItems:   LineItem[];
+  description?: string;
+}): Promise<FeeTemplate> {
+  return clientFetch<FeeTemplate>("/fees/templates", {
+    method: "POST",
+    body:   data,
+  });
+}
+
+export async function generateInvoicesFromTemplate(
+  templateId: string
+): Promise<{ generated: number; skipped: number }> {
+  return clientFetch(`/fees/templates/${templateId}/generate-invoices`, {
+    method: "POST",
+  });
+}
+
+// ── Invoices ──────────────────────────────────────────────────
+
 export async function getFeeDashboard(
-  schoolId: string,
-  termLabel?: string
+  schoolId:   string,
+  termLabel?: string,
 ): Promise<FeeDashboardMetrics> {
   const params = new URLSearchParams({ schoolId });
   if (termLabel) params.set("termLabel", termLabel);
-  return authFetch<FeeDashboardMetrics>(`/fees/dashboard?${params.toString()}`);
+  return clientFetch<FeeDashboardMetrics>(`/fees/dashboard?${params.toString()}`);
 }
 
 export async function getInvoices(
-  schoolId: string,
-  status?: string,
-  termLabel?: string
+  schoolId:   string,
+  status?:    string,
+  termLabel?: string,
 ): Promise<FeeInvoice[]> {
   const params = new URLSearchParams({ schoolId });
-  if (status) params.set("status", status);
+  if (status)    params.set("status",    status);
   if (termLabel) params.set("termLabel", termLabel);
-  return authFetch<FeeInvoice[]>(`/fees/invoices?${params.toString()}`);
+  return clientFetch<FeeInvoice[]>(`/fees/invoices?${params.toString()}`);
 }
 
 export async function getInvoice(invoiceId: string): Promise<FeeInvoice> {
-  return authFetch<FeeInvoice>(`/fees/invoices/${invoiceId}`);
+  return clientFetch<FeeInvoice>(`/fees/invoices/${invoiceId}`);
 }
 
 export async function createInvoice(data: {
-  studentId: string;
-  schoolId: string;
-  termLabel: string;
+  studentId:   string;
+  schoolId:    string;
+  termLabel:   string;
   totalAmount: number;
-  lineItems?: { label: string; amount: number }[];
+  lineItems?:  LineItem[];
 }): Promise<FeeInvoice> {
-  return authFetch<FeeInvoice>("/fees/invoices", {
+  return clientFetch<FeeInvoice>("/fees/invoices", {
     method: "POST",
-    body: data,
+    body:   data,
   });
 }
 
 export async function getInvoicePayments(invoiceId: string): Promise<Payment[]> {
-  return authFetch<Payment[]>(`/fees/invoices/${invoiceId}/payments`);
+  return clientFetch<Payment[]>(`/fees/invoices/${invoiceId}/payments`);
 }
 
+// ── Payments ──────────────────────────────────────────────────
+
 export async function recordPayment(data: {
-  invoiceId: string;
-  percentageToPay: number;
-  paymentMethod?: string;
-  reference?: string;
-  recordedBy?: string;
-  note?: string;
+  invoiceId:     string;
+  amount:        number;
+  paymentMethod: PaymentMethod;
+  reference?:    string;
+  recordedBy?:   string;
+  note?:         string;
 }): Promise<{ invoice: FeeInvoice; payment: Payment; receiptNumber: string }> {
-  return authFetch("/fees/payments", {
+  return clientFetch("/fees/payments", {
     method: "POST",
-    body: data,
+    body:   data,
   });
 }
 
@@ -507,18 +626,48 @@ export function getReceiptUrl(paymentId: string): string {
   return `${base}/fees/payments/${paymentId}/receipt`;
 }
 
+// ── Reminders ─────────────────────────────────────────────────
+
+export async function sendFeeReminders(
+  schoolId: string,
+): Promise<{ sent: number }> {
+  return clientFetch(`/fees/reminders/${schoolId}`, { method: "POST" });
+}
+
+// ── Dunning config ─────────────────────────────────────────────
+
 export async function getDunningConfig(
-  schoolId: string
+  schoolId: string,
 ): Promise<DunningConfig | null> {
-  return authFetch<DunningConfig | null>(`/fees/dunning/${schoolId}`);
+  return clientFetch<DunningConfig | null>(`/fees/dunning/${schoolId}`);
 }
 
 export async function updateDunningConfig(
   schoolId: string,
-  data: Partial<Pick<DunningConfig, "enabled" | "daysBeforeExam" | "emailTemplate">>
+  data: Partial<Pick<DunningConfig, "enabled" | "daysBeforeExam" | "emailTemplate">>,
 ): Promise<DunningConfig> {
-  return authFetch<DunningConfig>(`/fees/dunning/${schoolId}`, {
+  return clientFetch<DunningConfig>(`/fees/dunning/${schoolId}`, {
     method: "PATCH",
-    body: data,
+    body:   data,
   });
+}
+
+export interface FullReportCard {
+  report: import("@/types").Report & {
+    student: import("@/types").Student;
+    class:   import("@/types").ClassSection;
+  };
+  scores: (import("@/types").Score & {
+    subject: import("@/types").Subject;
+  })[];
+  classSize:       number;
+  classHighest:    number;
+  classLowest:     number;
+  classAverage:    number;
+  totalObtained:   number;
+  totalObtainable: number;
+}
+
+export async function getReportFull(reportId: string): Promise<FullReportCard> {
+  return clientFetch<FullReportCard>(`/reports/${reportId}/full`);
 }
