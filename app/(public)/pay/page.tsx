@@ -379,7 +379,7 @@ function PayPortalPage() {
   );
 }
 
-export function PayPortalMainPage() {
+export default function PayPortalMainPage() {
   return (
     <Suspense fallback={null}>
       <PayPortalPage />
