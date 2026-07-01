@@ -1,4 +1,11 @@
-
+/**
+ * lib/queries/keys.ts
+ *
+ * Centralised query key factory. Every key is defined here so that
+ * invalidation is consistent — calling queryClient.invalidateQueries
+ * with keys.students.all(schoolId) will correctly bust every student
+ * query for that school regardless of which component created it.
+ */
 
 export const keys = {
   // Auth
@@ -52,10 +59,15 @@ export const keys = {
 
   // Attendance
   attendance: {
-    byClassAndDate: (classId: string, date: string) =>
-      ["attendance", classId, date] as const,
-    byStudent: (studentId: string, from: string, to: string) =>
+    activeSession:  () => ["attendance", "session", "active"] as const,
+    daily:          (classId: string, date: string) =>
+      ["attendance", "daily", classId, date] as const,
+    bySession:      (classId: string, date: string, session: string) =>
+      ["attendance", classId, date, session] as const,
+    byStudent:      (studentId: string, from: string, to: string) =>
       ["attendance", "student", studentId, from, to] as const,
+    stats:          (classId: string, from: string, to: string) =>
+      ["attendance", "stats", classId, from, to] as const,
   },
 
   // Scores
@@ -74,6 +86,8 @@ export const keys = {
 
   // Fees
   fees: {
+    templates: (schoolId: string) =>
+      ["fees", "templates", schoolId] as const,
     dashboard: (schoolId: string, termLabel?: string) =>
       termLabel
         ? ["fees", "dashboard", schoolId, termLabel] as const

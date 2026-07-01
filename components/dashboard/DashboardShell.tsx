@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, GraduationCap, CreditCard,
   BookOpen, School, Settings, MessageSquare, Menu, X,
-  LogOut, ChevronRight, Loader2,
+  LogOut, ChevronRight, Loader2, ClipboardList,
 } from "lucide-react";
 import { classNames } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
@@ -28,6 +28,7 @@ const ALL_NAV_ITEMS: {
   { label: "Staff & Duties", href: "/dashboard/duties",   icon: Users,           roles: ["super_admin", "admin"] },
   { label: "Students",     href: "/dashboard/students",   icon: GraduationCap,   roles: ["super_admin", "admin"] },
   { label: "Collections",  href: "/dashboard/collections",icon: CreditCard,      roles: ["super_admin", "admin", "bursar"] },
+  { label: "Attendance",   href: "/dashboard/attendance", icon: ClipboardList,   roles: ["super_admin", "admin", "teacher"] },
   { label: "Academics",    href: "/dashboard/academics",  icon: BookOpen,        roles: ["super_admin", "admin", "teacher"] },
   { label: "Classes",      href: "/dashboard/classes",    icon: School,          roles: ["super_admin", "admin"] },
   { label: "Messages",     href: "/dashboard/messages",   icon: MessageSquare,   roles: ["super_admin", "admin"] },

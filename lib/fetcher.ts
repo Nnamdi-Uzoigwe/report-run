@@ -32,13 +32,20 @@ export async function setAuthCookies(
   refreshToken: string
 ): Promise<void> {
   const store = await cookies();
+  // Access token: NOT httpOnly — browser reads it for Authorization headers
   store.set("rr_access", accessToken, {
-    ...COOKIE_OPTS,
-    maxAge: 60 * 15, // 15 minutes
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path:     "/",
+    maxAge:   60 * 15, // 15 minutes
   });
+  // Refresh token: NOT httpOnly — browser reads it to call /auth/refresh
+  // It is still protected by sameSite:lax and secure:true in production
   store.set("rr_refresh", refreshToken, {
-    ...COOKIE_OPTS,
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path:     "/",
+    maxAge:   60 * 60 * 24 * 30, // 30 days
   });
 }
 
