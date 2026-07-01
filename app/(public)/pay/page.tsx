@@ -57,7 +57,7 @@ function ProgressBar({ pct }: { pct: number }) {
 
 // ── Page ──────────────────────────────────────────────────────
 
-export default function PayPortalPage() {
+function PayPortalPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -376,5 +376,13 @@ export default function PayPortalPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export function PayPortalMainPage() {
+  return (
+    <Suspense fallback={null}>
+      <PayPortalPage />
+    </Suspense>
   );
 }
