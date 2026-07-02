@@ -264,6 +264,16 @@ export async function createGradingScheme(data: {
   });
 }
 
+export async function updateGradingScheme(
+  schemeId: string,
+  data: { name?: string; bands?: GradingScheme["bands"] }
+): Promise<GradingScheme> {
+  return clientFetch<GradingScheme>(`/grading/${schemeId}`, {
+    method: "PATCH",
+    body:   data,
+  });
+}
+
 export async function setDefaultGradingScheme(
   schemeId: string
 ): Promise<GradingScheme> {
