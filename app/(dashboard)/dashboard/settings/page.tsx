@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Save, School, Bell, BookOpen, CreditCard,
+  Save, School, Bell as _Bell, BookOpen, CreditCard,
   Shield, Plus, Trash2, CheckCircle, AlertCircle,
   Eye, EyeOff, Star,
 } from "lucide-react";
@@ -19,6 +19,7 @@ import {
 import {
   useGradingSchemes, useCreateGradingScheme,
   useSetDefaultGradingScheme, useDeleteGradingScheme,
+  useUpdateGradingScheme,
 } from "@/lib/queries/classes";
 import { usePermission } from "@/lib/hooks/usePermission";
 import { useAuthStore } from "@/lib/store";
@@ -124,14 +125,130 @@ function gradeVariant(grade: string): "success" | "warning" | "error" | "default
 // ── TABS ──────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "school",       label: "School Info",      icon: School   },
-  { id: "grading",      label: "Grade Scale",       icon: BookOpen },
-  { id: "account",      label: "Account & Security",icon: Shield   },
-  { id: "subscription", label: "Subscription",      icon: CreditCard },
-  { id: "notifications",label: "Notifications",     icon: Bell     },
+  { id: "school",       label: "School Info",       icon: School    },
+  { id: "grading",      label: "Grade Scale",        icon: BookOpen  },
+  { id: "account",      label: "Account & Security", icon: Shield    },
+  { id: "subscription", label: "Subscription",       icon: CreditCard},
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+// ── Scheme Edit Form ─────────────────────────────────────────
+
+function SchemeEditForm({
+  scheme,
+  onSave,
+  saving,
+}: {
+  scheme:  any;
+  onSave:  (data: { name: string; bands: GradeBand[] }) => Promise<void>;
+  saving:  boolean;
+}) {
+  const form = useForm<GradingForm>({
+    resolver:      zodResolver(gradingSchema) as any,
+    defaultValues: {
+      name:  scheme.name,
+      bands: scheme.bands.map((b: GradeBand) => ({
+        grade:    b.grade,
+        minScore: b.minScore,
+        maxScore: b.maxScore,
+        remark:   b.remark ?? "",
+      })),
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name:    "bands",
+  });
+
+  return (
+    <div className="p-4 flex flex-col gap-4">
+      <Input
+        label="Scheme name"
+        required
+        error={form.formState.errors.name?.message}
+        {...form.register("name")}
+      />
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-semibold text-text-primary uppercase tracking-wide">Grade bands</label>
+          <button
+            type="button"
+            onClick={() => append({ grade: "", minScore: 0, maxScore: 0, remark: "" })}
+            className="text-xs text-navy-600 font-medium cursor-pointer hover:text-navy-700"
+          >
+            + Add band
+          </button>
+        </div>
+
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-4 bg-surface-secondary border-b border-border">
+            {["Grade","Min","Max","Remark"].map((h) => (
+              <div key={h} className="px-3 py-2 text-xs font-semibold text-text-muted">{h}</div>
+            ))}
+          </div>
+          {fields.map((field, idx) => (
+            <div
+              key={field.id}
+              className={classNames(
+                "grid grid-cols-4 border-b border-border last:border-0",
+                idx % 2 === 0 ? "bg-surface" : "bg-surface-secondary",
+              )}
+            >
+              <div className="px-2 py-2">
+                <input
+                  placeholder="A1"
+                  className="w-full h-8 px-2 text-sm border border-border rounded bg-surface focus:outline-2 focus:outline-navy-600"
+                  {...form.register(`bands.${idx}.grade`)}
+                />
+              </div>
+              <div className="px-2 py-2">
+                <input
+                  type="number"
+                  className="w-full h-8 px-2 text-sm border border-border rounded bg-surface focus:outline-2 focus:outline-navy-600"
+                  {...form.register(`bands.${idx}.minScore`)}
+                />
+              </div>
+              <div className="px-2 py-2">
+                <input
+                  type="number"
+                  className="w-full h-8 px-2 text-sm border border-border rounded bg-surface focus:outline-2 focus:outline-navy-600"
+                  {...form.register(`bands.${idx}.maxScore`)}
+                />
+              </div>
+              <div className="px-2 py-2 flex items-center gap-1">
+                <input
+                  placeholder="Excellent"
+                  className="w-full h-8 px-2 text-sm border border-border rounded bg-surface focus:outline-2 focus:outline-navy-600"
+                  {...form.register(`bands.${idx}.remark`)}
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(idx)}
+                  className="p-1 text-text-muted hover:text-error cursor-pointer shrink-0"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button
+          loading={saving}
+          onClick={form.handleSubmit((data) => onSave(data as any))}
+        >
+          <Save size={14} />
+          Save changes
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 // ── PAGE ──────────────────────────────────────────────────────
 
@@ -139,6 +256,7 @@ export default function SettingsPage() {
   const [activeTab,    setActiveTab   ] = useState<TabId>("school");
   const [toast,        setToast       ] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showNewScheme,setShowNewScheme] = useState(false);
+  const [editingSchemeId, setEditingSchemeId] = useState<string | null>(null);
   const [showPwd,      setShowPwd     ] = useState({ current: false, new: false, confirm: false });
 
   const { can }  = usePermission();
@@ -150,7 +268,6 @@ export default function SettingsPage() {
   const { data: subscription                             } = useActiveSubscription();
   const { data: plans    = []                            } = usePlans();
   const { data: schemes  = [], isLoading: schemesLoading } = useGradingSchemes();
-  // const { data: dunning                                  } = useDunningConfig();
 
   // Mutations
   const updateSchool   = useUpdateSchool();
@@ -158,7 +275,7 @@ export default function SettingsPage() {
   const createScheme   = useCreateGradingScheme();
   const setDefault     = useSetDefaultGradingScheme();
   const deleteScheme   = useDeleteGradingScheme();
-  // const updateDunning  = useUpdateDunningConfig();
+  const updateScheme   = useUpdateGradingScheme();
   const initiateSub    = useInitiateSubscription();
 
   // Forms
@@ -543,7 +660,9 @@ export default function SettingsPage() {
                   </div>
                 </Card>
               ) : (
-                schemes.map((scheme) => (
+                <>{schemes.map((scheme) => {
+                const isEditing = editingSchemeId === scheme.id;
+                return (
                   <Card key={scheme.id} padding="none">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                       <div className="flex items-center gap-2">
@@ -562,6 +681,13 @@ export default function SettingsPage() {
                               Set as default
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setEditingSchemeId(isEditing ? null : scheme.id)}
+                          >
+                            {isEditing ? "Cancel" : "Edit"}
+                          </Button>
                           {!scheme.isDefault && (
                             <Button
                               size="sm"
@@ -576,21 +702,41 @@ export default function SettingsPage() {
                         </div>
                       )}
                     </div>
-                    <div className="divide-y divide-border">
-                      {scheme.bands.map((band: GradeBand) => (
-                        <div key={band.grade} className="flex items-center justify-between px-4 py-2.5">
-                          <div className="flex items-center gap-3">
-                            <Badge label={band.grade} variant={gradeVariant(band.grade)} />
-                            <span className="text-sm text-text-secondary">{band.remark ?? "—"}</span>
+
+                    {/* Inline edit form */}
+                    {isEditing ? (
+                      <SchemeEditForm
+                        scheme={scheme}
+                        onSave={async (data) => {
+                          try {
+                            await updateScheme.mutateAsync({ schemeId: scheme.id, data });
+                            setEditingSchemeId(null);
+                            showToast("Grading scheme updated.", "success");
+                          } catch (err) {
+                            showToast((err as Error).message, "error");
+                          }
+                        }}
+                        saving={updateScheme.isPending}
+                      />
+                    ) : (
+                      <div className="divide-y divide-border">
+                        {scheme.bands.map((band: GradeBand) => (
+                          <div key={band.grade} className="flex items-center justify-between px-4 py-2.5">
+                            <div className="flex items-center gap-3">
+                              <Badge label={band.grade} variant={gradeVariant(band.grade)} />
+                              <span className="text-sm text-text-secondary">{band.remark ?? "—"}</span>
+                            </div>
+                            <span className="text-sm text-text-muted">
+                              {band.minScore}–{band.maxScore} marks
+                            </span>
                           </div>
-                          <span className="text-sm text-text-muted">
-                            {band.minScore}–{band.maxScore} marks
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </Card>
-                ))
+                );
+              })}
+              </>
               )}
             </div>
           )}
@@ -782,9 +928,6 @@ export default function SettingsPage() {
               </Card>
             </div>
           )}
-
-          {/* ── NOTIFICATIONS ── */}
-        
 
         </div>
       </div>

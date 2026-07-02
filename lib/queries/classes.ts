@@ -13,6 +13,7 @@ import {
   deleteSubject,
   getGradingSchemes,
   createGradingScheme,
+  updateGradingScheme,
   setDefaultGradingScheme,
   deleteGradingScheme,
 } from "@/lib/api";
@@ -168,6 +169,21 @@ export function useCreateGradingScheme() {
       queryClient.invalidateQueries({
         queryKey: keys.grading.all(schoolId!),
       });
+    },
+  });
+}
+
+export function useUpdateGradingScheme() {
+  const schoolId    = useAuthStore((s) => s.schoolId);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ schemeId, data }: {
+      schemeId: string;
+      data:     Parameters<typeof updateGradingScheme>[1];
+    }) => updateGradingScheme(schemeId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.grading.all(schoolId!) });
     },
   });
 }

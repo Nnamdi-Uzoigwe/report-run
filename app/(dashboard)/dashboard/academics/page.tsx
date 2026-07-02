@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen, Save, Send, RefreshCw,
-  ChevronDown, AlertCircle, CheckCircle, Printer,
+  ChevronDown, AlertCircle, CheckCircle, Printer, Download,
 } from "lucide-react";
 import {
   PageHeader, Card, CardHeader, Badge, Button, EmptyState,
@@ -476,6 +476,53 @@ export default function AcademicsPage() {
   const [term,             setTerm            ] = useState<ScoreTerm>("first");
   const [academicYear,     setAcademicYear    ] = useState("2024/2025");
 
+  const [exporting,    setExporting   ] = useState<"scores" | "transcript" | null>(null);
+
+  const schoolId = useAuthStore((s) => s.schoolId);
+
+  async function downloadExcel(url: string, filename: string) {
+    const token = document.cookie
+      .split("; ")
+      .find((r) => r.startsWith("rr_access="))
+      ?.substring("rr_access=".length);
+    const base = process.env.NEXT_PUBLIC_API_URL ?? "https://school-mgt-server.vercel.app/api/v1";
+    const res  = await fetch(`${base}${url}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Download failed");
+    const blob   = await res.blob();
+    const link   = document.createElement("a");
+    link.href    = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  async function handleScoreSheetExport() {
+    if (!selectedClassId || !selectedSubjectId || !schoolId) return;
+    setExporting("scores");
+    try {
+      await downloadExcel(
+        `/reports/export/subject-scores?subjectId=${selectedSubjectId}&classId=${selectedClassId}&schoolId=${schoolId}&term=${term}&academicYear=${academicYear}`,
+        `scores_${selectedSubject?.name ?? "subject"}_${term}_${academicYear}.pdf`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleTranscriptExport() {
+    if (!selectedClassId || !schoolId) return;
+    setExporting("transcript");
+    try {
+      await downloadExcel(
+        `/reports/export/transcript?classId=${selectedClassId}&schoolId=${schoolId}&term=${term}&academicYear=${academicYear}`,
+        `transcript_${availableClasses.find((c) => c.id === selectedClassId)?.name ?? "class"}_${term}_${academicYear}.pdf`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
   const router = useRouter();
   const { can, isTeacher } = usePermission();
   const readOnly = !can.enterScores;
@@ -635,23 +682,36 @@ export default function AcademicsPage() {
       {/* ── Score entry tab ── */}
       {activeTab === "scores" && (
         <Card padding="none">
-          <div className="px-5 py-4 border-b border-border">
-            <p className="text-sm font-semibold text-text-primary">
-              {selectedSubject
-                ? `${selectedSubject.name} — ${availableClasses.find((c) => c.id === selectedClassId)?.name}`
-                : selectedClassId
-                ? "Select a subject to enter scores"
-                : "Select a class and subject to begin"}
-            </p>
-            {selectedSubject && (
-              <p className="text-xs text-text-muted mt-0.5">
-                Click any cell and type the score. Click Save scores when done.
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-text-primary">
+                {selectedSubject
+                  ? `${selectedSubject.name} — ${availableClasses.find((c) => c.id === selectedClassId)?.name}`
+                  : selectedClassId
+                  ? "Select a subject to enter scores"
+                  : "Select a class and subject to begin"}
               </p>
-            )}
-            {isTeacher && selectedClassId && subjects.length === 0 && (
-              <p className="text-xs text-text-muted mt-0.5">
-                No subjects assigned to you in this class. Ask your admin to assign subjects.
-              </p>
+              {selectedSubject && (
+                <p className="text-xs text-text-muted mt-0.5">
+                  Click any cell and type the score. Click Save scores when done.
+                </p>
+              )}
+              {isTeacher && selectedClassId && subjects.length === 0 && (
+                <p className="text-xs text-text-muted mt-0.5">
+                  No subjects assigned to you in this class. Ask your admin to assign subjects.
+                </p>
+              )}
+            </div>
+            {selectedClassId && selectedSubjectId && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={exporting === "scores"}
+                onClick={handleScoreSheetExport}
+              >
+                <Download size={13} />
+                Export score sheet
+              </Button>
             )}
           </div>
 
@@ -691,6 +751,17 @@ export default function AcademicsPage() {
             </div>
             {!readOnly && selectedClassId && (
               <div className="flex items-center gap-2">
+                {isClassTeacherOfSelected && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={exporting === "transcript"}
+                    onClick={handleTranscriptExport}
+                  >
+                    <Download size={13} />
+                    Export transcript
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -705,13 +776,13 @@ export default function AcademicsPage() {
                   variant="secondary"
                   loading={publishReports.isPending}
                   onClick={() => {
-                    if (confirm("This will publish all reports and email parents. Continue?")) {
+                    if (confirm("This will publish all reports and email a PDF report card to each parent. Continue?")) {
                       publishReports.mutate({ classId: selectedClassId, term, academicYear });
                     }
                   }}
                 >
                   <Send size={13} />
-                  Publish & email
+                  Publish & email PDF
                 </Button>
               </div>
             )}
