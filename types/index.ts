@@ -168,7 +168,7 @@ export interface StaffMember {
   phoneNumber?: string;
   isActive:     boolean;
   inviteStatus: InviteStatus | null;
-  schoolId:     string;
+  schoolId:     string | null;
   createdAt:    string;
 }
 

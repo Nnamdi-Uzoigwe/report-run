@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import {
   ClipboardList, CheckSquare, AlertCircle,
-  Sun, CloudSun, ChevronLeft, ChevronRight, Users, Lock,
+  Sun, CloudSun, ChevronLeft, ChevronRight, Users, Lock, Download,
 } from "lucide-react";
+import { useAuthStore } from "@/lib/store";
+import { useAssignmentsByUser } from "@/lib/queries/staff";
 import {
   PageHeader, Card, CardHeader, Badge, Button, EmptyState,
 } from "@/components/ui";
@@ -13,7 +15,6 @@ import {
   useSessionAttendance,
   useDailySummary,
   useSubmitAttendance,
-  EMPTY_ATTENDANCE,
 } from "@/lib/queries/academics";
 import { useClasses } from "@/lib/queries/classes";
 import { useStudents } from "@/lib/queries/students";
@@ -144,13 +145,9 @@ function RegisterView({
   lockReason: string;
 }) {
   const { data: students = [], isLoading: studentsLoading } = useStudents(classId);
-//   const { data: existing = [], isLoading: existingLoading } = useSessionAttendance(
-//     classId, date, session,
-//   );
-  const { data: existing = EMPTY_ATTENDANCE, isLoading: existingLoading } = useSessionAttendance(
-  classId, date, session,
-   );
-
+  const { data: existing = [], isLoading: existingLoading } = useSessionAttendance(
+    classId, date, session,
+  );
   const submit = useSubmitAttendance();
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -438,21 +435,68 @@ export default function AttendancePage() {
   const [date,          setDate         ] = useState(today);
   const [selectedClass, setSelectedClass] = useState("");
   const [activeTab,     setActiveTab    ] = useState<"register" | "summary">("register");
+  const [exporting,     setExporting    ] = useState(false);
 
-  const { can }    = usePermission();
-  const readOnly   = !can.submitAttendance;
+  const { can, isTeacher } = usePermission();
+  const readOnly  = !can.submitAttendance;
+  const user      = useAuthStore((s) => s.user);
+  const schoolId  = useAuthStore((s) => s.schoolId);
 
-  const { data: classes  = []  }                                    = useClasses();
-  const { data: sessionInfo, isLoading: sessionLoading }            = useActiveSession();
+  // Load this teacher's assignments to filter which classes they can see
+  const { data: myAssignments = [] } = useAssignmentsByUser(user?.id ?? "");
+
+  // Admins see all classes; teachers only see their assigned classes
+  const { data: allClasses = [] } = useClasses();
+  const availableClasses = isTeacher
+    ? allClasses.filter((c) => myAssignments.some((a) => a.classId === c.id && a.isClassTeacher))
+    : allClasses;
+
+  // Teachers must be class teacher on at least one class to access attendance
+  const isClassTeacher = isTeacher
+    ? myAssignments.some((a) => a.isClassTeacher)
+    : true;
+
+  const { data: sessionInfo, isLoading: sessionLoading } = useActiveSession();
 
   const isToday         = date === today;
   const isMorningLocked = isToday ? (sessionInfo?.isMorningLocked ?? false) : false;
-  // Afternoon is locked if it's today and we are still in morning session
-  const isAfternoonLocked = isToday ? !(sessionInfo?.isMorningLocked ?? true) === false : false;
+  const morningLocked   = isToday ? isMorningLocked  : false;
+  const afternoonLocked = isToday ? !isMorningLocked : false;
 
-  // For past dates: both sessions are always editable by admins
-  const morningLocked   = isToday ? isMorningLocked   : false;
-  const afternoonLocked = isToday ? !isMorningLocked  : false;
+  async function handleExport() {
+    if (!selectedClass || !schoolId) return;
+    setExporting(true);
+    try {
+      const base     = process.env.NEXT_PUBLIC_API_URL ?? "https://school-mgt-server.vercel.app/api/v1";
+      const token    = document.cookie.split("; ").find((r) => r.startsWith("rr_access="))?.substring("rr_access=".length);
+      const fromDate = offsetDate(today, -30);
+      const url      = `${base}/attendance/export?classId=${selectedClass}&schoolId=${schoolId}&from=${fromDate}&to=${today}`;
+      const res      = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Export failed");
+      const blob    = await res.blob();
+      const link    = document.createElement("a");
+      link.href     = URL.createObjectURL(blob);
+      link.download = `register_${availableClasses.find(c => c.id === selectedClass)?.name ?? "class"}_${fromDate}_to_${today}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // Block teachers who are not appointed as class teacher
+  if (isTeacher && !isClassTeacher) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center gap-3 p-6">
+        <Lock size={32} className="text-text-muted" />
+        <p className="text-sm font-semibold text-text-primary">Access restricted</p>
+        <p className="text-xs text-text-muted max-w-xs leading-relaxed">
+          Only class teachers can access the attendance register.
+          Ask your admin to appoint you as class teacher for a class.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -463,6 +507,19 @@ export default function AttendancePage() {
       <PageHeader
         title="Attendance"
         subtitle="Morning and afternoon register"
+        action={
+          selectedClass ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exporting}
+              onClick={handleExport}
+            >
+              <Download size={14} />
+              Export register
+            </Button>
+          ) : undefined
+        }
       />
 
       {/* Controls */}
@@ -479,7 +536,7 @@ export default function AttendancePage() {
               className="w-full h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
             >
               <option value="">Select a class</option>
-              {classes.map((c) => (
+              {availableClasses.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
