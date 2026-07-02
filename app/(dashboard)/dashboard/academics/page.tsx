@@ -17,6 +17,8 @@ import {
 import { useClasses, useSubjects, useGradingSchemes } from "@/lib/queries/classes";
 import { useStudents } from "@/lib/queries/students";
 import { usePermission } from "@/lib/hooks/usePermission";
+import { useAssignmentsByUser } from "@/lib/queries/staff";
+import { useAuthStore } from "@/lib/store";
 import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 import { classNames } from "@/lib/utils";
 import type { ScoreTerm, Score, Report, Subject } from "@/types";
@@ -477,10 +479,31 @@ export default function AcademicsPage() {
   const router = useRouter();
   const { can, isTeacher } = usePermission();
   const readOnly = !can.enterScores;
+  const user     = useAuthStore((s) => s.user);
 
-  const { data: classes  = [] } = useClasses();
-  const { data: subjects = [] } = useSubjects(selectedClassId);
-  const { data: schemes  = [] } = useGradingSchemes();
+  // Get teacher's own assignments to know which classes + subjects they teach
+  const { data: myAssignments = [] } = useAssignmentsByUser(user?.id ?? "");
+
+  const { data: allClasses = [] } = useClasses();
+  const { data: allSubjects = [] } = useSubjects(selectedClassId);
+  const { data: schemes     = [] } = useGradingSchemes();
+
+  // Teachers only see classes they are assigned to
+  const availableClasses = isTeacher
+    ? allClasses.filter((c) => myAssignments.some((a) => a.classId === c.id))
+    : allClasses;
+
+  // Teachers only see subjects they personally teach in the selected class
+  const assignmentForClass = myAssignments.find((a) => a.classId === selectedClassId);
+  const mySubjectIds = assignmentForClass?.subjects?.map((s) => s.id) ?? [];
+  const subjects = isTeacher && mySubjectIds.length > 0
+    ? allSubjects.filter((s) => mySubjectIds.includes(s.id))
+    : allSubjects;
+
+  // Teacher is class teacher of the currently selected class
+  const isClassTeacherOfSelected = isTeacher
+    ? myAssignments.some((a) => a.classId === selectedClassId && a.isClassTeacher)
+    : true; // admins always have access
 
   const { data: reports = [], isLoading: reportsLoading } = useReports(
     selectedClassId, term, academicYear,
@@ -491,9 +514,8 @@ export default function AcademicsPage() {
 
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
 
-  // For a teacher who is class teacher, allow them to add terminal comments
-  // In a real app this would check staffAssignment.isClassTeacher — defaulting to true for admins
-  const isClassTeacher = !isTeacher || can.generateReports;
+  // Class teacher terminal access
+  const isClassTeacher = isTeacher ? isClassTeacherOfSelected : true;
 
   const defaultScheme = schemes.find((s) => s.isDefault);
 
@@ -519,7 +541,7 @@ export default function AcademicsPage() {
               className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
             >
               <option value="">Select class</option>
-              {classes.map((c) => (
+              {availableClasses.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -583,20 +605,31 @@ export default function AcademicsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(["scores", "reports"] as const).map((tab) => (
+        <button
+          onClick={() => setActiveTab("scores")}
+          className={classNames(
+            "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer",
+            activeTab === "scores"
+              ? "border-navy-600 text-navy-600"
+              : "border-transparent text-text-muted hover:text-text-primary",
+          )}
+        >
+          Score Entry
+        </button>
+        {/* Reports tab — only visible to admins or class teachers of selected class */}
+        {(!isTeacher || isClassTeacherOfSelected) && (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => setActiveTab("reports")}
             className={classNames(
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-              activeTab === tab
+              activeTab === "reports"
                 ? "border-navy-600 text-navy-600"
                 : "border-transparent text-text-muted hover:text-text-primary",
             )}
           >
-            {tab === "scores" ? "Score Entry" : "Reports & Results"}
+            Reports & Results
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── Score entry tab ── */}
@@ -605,7 +638,7 @@ export default function AcademicsPage() {
           <div className="px-5 py-4 border-b border-border">
             <p className="text-sm font-semibold text-text-primary">
               {selectedSubject
-                ? `${selectedSubject.name} — ${classes.find((c) => c.id === selectedClassId)?.name}`
+                ? `${selectedSubject.name} — ${availableClasses.find((c) => c.id === selectedClassId)?.name}`
                 : selectedClassId
                 ? "Select a subject to enter scores"
                 : "Select a class and subject to begin"}
@@ -613,6 +646,11 @@ export default function AcademicsPage() {
             {selectedSubject && (
               <p className="text-xs text-text-muted mt-0.5">
                 Click any cell and type the score. Click Save scores when done.
+              </p>
+            )}
+            {isTeacher && selectedClassId && subjects.length === 0 && (
+              <p className="text-xs text-text-muted mt-0.5">
+                No subjects assigned to you in this class. Ask your admin to assign subjects.
               </p>
             )}
           </div>
@@ -640,7 +678,7 @@ export default function AcademicsPage() {
             <div>
               <p className="text-sm font-semibold text-text-primary">
                 {selectedClassId
-                  ? `${classes.find((c) => c.id === selectedClassId)?.name} — ${term.charAt(0).toUpperCase() + term.slice(1)} Term ${academicYear}`
+                  ? `${availableClasses.find((c) => c.id === selectedClassId)?.name} — ${term.charAt(0).toUpperCase() + term.slice(1)} Term ${academicYear}`
                   : "Select a class to view reports"}
               </p>
               {selectedClassId && (
