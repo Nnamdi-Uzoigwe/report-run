@@ -28,7 +28,7 @@ function normaliseUser(u: ApiUser): User {
   role: u.role as UserRole,
   schoolId: u.schoolId,
   createdAt: u.createdAt,
-  lastLoginAt: new Date().toISOString(),
+  // lastLoginAt: new Date().toISOString(),
   isActive: false,
   isEmailVerified: false,
   inviteStatus: null,

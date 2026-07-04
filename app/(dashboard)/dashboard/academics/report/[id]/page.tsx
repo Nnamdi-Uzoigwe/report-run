@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getReportFull } from "@/lib/api";
 import { useSchool } from "@/lib/queries/school";
 import { Printer, ArrowLeft, Loader2 } from "lucide-react";
+import Image from "next/image";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -137,7 +138,13 @@ function ReportCard() {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"16px",marginBottom:"6px"}}>
         {school?.logoUrl && (
-          <img src={school.logoUrl} alt="logo" style={{width:"50px",height:"50px",objectFit:"contain"}} />
+          <Image
+              src={school.logoUrl}
+              alt="logo"
+              width={50}
+              height={50}
+              style={{ objectFit: "contain" }}
+            />
         )}
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:"16px",fontWeight:"bold",textTransform:"uppercase",letterSpacing:"1px"}}>
@@ -165,7 +172,14 @@ function ReportCard() {
             <td style={{...cellStyle,textTransform:"uppercase"}}>{student.gender ?? "—"}</td>
             <td rowSpan={3} style={{...cellStyle,width:"70px",textAlign:"center",verticalAlign:"middle"}}>
               {student.photoUrl
-                ? <img src={student.photoUrl} alt="student" style={{width:"60px",height:"70px",objectFit:"cover"}} />
+                ? 
+                <Image
+                    src={student.photoUrl}
+                    alt="student"
+                    width={600}
+                    height={700}
+                    style={{ objectFit: "cover" }}
+                  />
                 : <div style={{width:"60px",height:"70px",border:"1px dashed #ccc",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"8px",color:"#aaa"}}>Photo</div>
               }
             </td>

@@ -10,6 +10,9 @@ import {
   getActiveSubscription,
   getSubscriptionHistory,
   initiateSubscription,
+  listBanks,
+  verifyBankAccount,
+  saveBankAccount,
 } from "@/lib/api";
 import { keys } from "./keys";
 
@@ -53,11 +56,11 @@ export function useUploadSchoolLogo() {
 
 // ── Plans ─────────────────────────────────────────────────────
 
-export function usePlans() {
+export function usePlans(billingCycle?: "monthly" | "annually") {
   return useQuery({
-    queryKey: keys.plans,
-    queryFn:  getPlans,
-    staleTime: 30 * 60 * 1000, // Plans rarely change
+    queryKey: [...keys.plans, billingCycle ?? "all"],
+    queryFn:  () => getPlans(billingCycle),
+    staleTime: 30 * 60 * 1000,
   });
 }
 
@@ -95,6 +98,40 @@ export function useInitiateSubscription() {
       queryClient.invalidateQueries({
         queryKey: keys.subscription.active(schoolId!),
       });
+    },
+  });
+}
+
+// ── Bank account ──────────────────────────────────────────────
+
+export function useListBanks() {
+  return useQuery({
+    queryKey: ["banks"],
+    queryFn:  listBanks,
+    staleTime: 1000 * 60 * 60, // 1 hour — bank list rarely changes
+  });
+}
+
+export function useVerifyBankAccount() {
+  return useMutation({
+    mutationFn: ({ accountNumber, bankCode }: { accountNumber: string; bankCode: string }) =>
+      verifyBankAccount(accountNumber, bankCode),
+  });
+}
+
+export function useSaveBankAccount() {
+  const schoolId    = useAuthStore((s) => s.schoolId);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {
+      accountNumber: string;
+      bankCode:      string;
+      bankName:      string;
+      accountName:   string;
+    }) => saveBankAccount(schoolId!, data.accountNumber, data.bankCode, data.bankName, data.accountName),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["school", schoolId], updated);
     },
   });
 }

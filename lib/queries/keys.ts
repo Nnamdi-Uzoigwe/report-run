@@ -98,4 +98,9 @@ export const keys = {
     payments: (invoiceId: string) => ["fees", "payments", invoiceId] as const,
     dunning:  (schoolId: string)  => ["fees", "dunning",  schoolId]  as const,
   },
+  // Academic Sessions
+  sessions: {
+    all:    (schoolId: string) => ["sessions", schoolId]           as const,
+    active: (schoolId: string) => ["sessions", "active", schoolId] as const,
+  },
 } as const;

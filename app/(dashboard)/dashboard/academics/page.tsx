@@ -10,14 +10,16 @@ import {
   PageHeader, Card, CardHeader, Badge, Button, EmptyState,
 } from "@/components/ui";
 import {
-  useScoresBySubject, useSubmitScores,
+  useSubmitScores,
   useReports, useGenerateReports, usePublishReports,
   useUpdateReportTeacherInput,
 } from "@/lib/queries/academics";
 import { useClasses, useSubjects, useGradingSchemes } from "@/lib/queries/classes";
-import { useStudents } from "@/lib/queries/students";
 import { usePermission } from "@/lib/hooks/usePermission";
+import { useQuery } from "@tanstack/react-query";
+import { getClassRoster } from "@/lib/api";
 import { useAssignmentsByUser } from "@/lib/queries/staff";
+import { useSessions } from "@/lib/queries/session";
 import { useAuthStore } from "@/lib/store";
 import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 import { classNames } from "@/lib/utils";
@@ -25,11 +27,6 @@ import type { ScoreTerm, Score, Report, Subject } from "@/types";
 
 // ── Constants ─────────────────────────────────────────────────
 
-const TERM_OPTIONS = [
-  { value: "first",  label: "First Term"  },
-  { value: "second", label: "Second Term" },
-  { value: "third",  label: "Third Term"  },
-];
 
 function gradeVariant(grade: string): "success" | "warning" | "error" | "default" {
   if (["A1", "B2", "B3"].includes(grade)) return "success";
@@ -54,49 +51,49 @@ interface ScoreRow {
 function ScoreEntryTable({
   classId,
   subject,
+  readOnly,
   term,
   academicYear,
-  readOnly,
 }: {
-  classId:      string;
-  subject:      Subject;
-  term:         ScoreTerm;
-  academicYear: string;
-  readOnly:     boolean;
+  classId:       string;
+  subject:       Subject;
+  readOnly:      boolean;
+  term?:         string;
+  academicYear?: string;
 }) {
-  const { data: students = [] }       = useStudents(classId);
-  const { data: existing = [], isLoading } = useScoresBySubject(subject.id, term, academicYear);
+  const schoolId    = useAuthStore((s) => s.schoolId);
   const submitScores = useSubmitScores();
+
+  // Single call returns both student list AND their existing scores
+  // Works for active session (current roster) and historical sessions (promoted students)
+  const { data: roster = [], isLoading } = useQuery({
+    queryKey: ["class-roster", subject.id, classId, schoolId, term ?? "active", academicYear ?? "active"],
+    queryFn:  () => getClassRoster(subject.id, classId, schoolId ?? "", term, academicYear),
+    enabled:  !!subject.id && !!classId && !!schoolId,
+  });
 
   const [rows, setRows] = useState<ScoreRow[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  // Build rows from students + any existing scores.
-  // We key on students.length and a stable string of existing IDs
-  // to avoid depending on array references that change every render.
-  const existingKey = existing.map((s) => `${s.studentId}:${s.caScore}:${s.examScore}`).join(",");
+  const rosterKey = roster.map(r => `${r.studentId}:${r.caScore}:${r.examScore}`).join(",");
 
   useEffect(() => {
-    const existingMap = new Map(existing.map((s) => [s.studentId, s]));
     setRows(
-      students.map((st) => {
-        const ex = existingMap.get(st.id);
-        return {
-          studentId:       st.id,
-          firstName:       st.firstName,
-          lastName:        st.lastName,
-          admissionNumber: st.admissionNumber,
-          caScore:         ex ? String(ex.caScore)  : "",
-          examScore:       ex ? String(ex.examScore) : "",
-          saved:           ex,
-        };
-      })
+      roster.map((r) => ({
+        studentId:       r.studentId,
+        firstName:       r.firstName,
+        lastName:        r.lastName,
+        admissionNumber: r.admissionNumber ?? undefined,
+        caScore:         r.caScore   != null ? String(r.caScore)   : "",
+        examScore:       r.examScore != null ? String(r.examScore) : "",
+        saved:           r.totalScore != null ? (r as any) : undefined,
+      })),
     );
     setDirty(false);
     setSaveStatus("idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students.length, existingKey]);
+  }, [rosterKey]);
 
   function updateRow(idx: number, field: "caScore" | "examScore", value: string) {
     setRows((prev) => {
@@ -119,25 +116,17 @@ function ScoreEntryTable({
   }
 
   async function handleSave() {
-    // Only submit rows that have at least one score entered
     const filled = rows.filter((r) => r.caScore !== "" || r.examScore !== "");
     if (filled.length === 0) return;
-
-    // Validate all
     for (const row of filled) {
       const err = validateRow(row);
-      if (err) {
-        setSaveStatus("error");
-        return;
-      }
+      if (err) { setSaveStatus("error"); return; }
     }
-
     setSaveStatus("saving");
     try {
       await submitScores.mutateAsync({
-        subjectId:    subject.id,
-        term,
-        academicYear,
+        subjectId: subject.id,
+        schoolId:  schoolId ?? "",
         entries: filled.map((r) => ({
           studentId: r.studentId,
           caScore:   Number(r.caScore)   || 0,
@@ -161,12 +150,12 @@ function ScoreEntryTable({
     );
   }
 
-  if (students.length === 0) {
+  if (roster.length === 0 && !isLoading) {
     return (
       <EmptyState
         icon={BookOpen}
-        title="No students in this class"
-        description="Add students to this class first."
+        title="No students found"
+        description="No students have scores for this subject in the selected session, and no current students are in this class."
       />
     );
   }
@@ -319,6 +308,7 @@ function ReportRow({
   const [neatness,  setNeatness ] = useState(report.neatness   ?? 3);
   const [saving,    setSaving   ] = useState(false);
   const [saved,     setSaved    ] = useState(false);
+  const schoolId = useAuthStore((s) => s.schoolId);
 
   const updateTeacher = useUpdateReportTeacherInput();
 
@@ -326,11 +316,10 @@ function ReportRow({
     setSaving(true);
     try {
       await updateTeacher.mutateAsync({
-        reportId:     report.id,
-        classId:      report.classId,
-        term:         report.term,
-        academicYear: report.academicYear,
-        data: { teacherComment: comment, conduct, punctuality, neatness },
+        reportId: report.id,
+        classId:  report.classId,
+        schoolId: schoolId ?? "",
+        data:     { teacherComment: comment, conduct, punctuality, neatness },
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -471,12 +460,11 @@ function ordinal(n: number): string {
 
 export default function AcademicsPage() {
   const [activeTab,        setActiveTab       ] = useState<"scores" | "reports">("scores");
-  const [selectedClassId,  setSelectedClassId ] = useState("");
-  const [selectedSubjectId,setSelectedSubjectId] = useState("");
-  const [term,             setTerm            ] = useState<ScoreTerm>("first");
-  const [academicYear,     setAcademicYear    ] = useState("2024/2025");
+  const [selectedClassId,   setSelectedClassId  ] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId ] = useState("");
+  const [selectedSessionId, setSelectedSessionId ] = useState("active");
 
-  const [exporting,    setExporting   ] = useState<"scores" | "transcript" | null>(null);
+  const [exporting, setExporting] = useState<"scores" | "transcript" | null>(null);
 
   const schoolId = useAuthStore((s) => s.schoolId);
 
@@ -528,6 +516,18 @@ export default function AcademicsPage() {
   const readOnly = !can.enterScores;
   const user     = useAuthStore((s) => s.user);
 
+  // All sessions — used to populate the session dropdown
+  const { data: sessions = [] } = useSessions();
+  const activeSession = sessions.find((s) => s.isActive);
+
+  // Derive term and academicYear from the selected session
+  // "active" is a sentinel value meaning "use the active session (backend auto-resolves)"
+  const selectedSession = selectedSessionId === "active"
+    ? activeSession
+    : sessions.find((s) => s.id === selectedSessionId);
+  const term         = (selectedSession?.currentTerm ?? "first") as ScoreTerm;
+  const academicYear = selectedSession?.academicYear ?? "";
+
   // Get teacher's own assignments to know which classes + subjects they teach
   const { data: myAssignments = [] } = useAssignmentsByUser(user?.id ?? "");
 
@@ -553,7 +553,10 @@ export default function AcademicsPage() {
     : true; // admins always have access
 
   const { data: reports = [], isLoading: reportsLoading } = useReports(
-    selectedClassId, term, academicYear,
+    selectedClassId,
+    schoolId ?? "",
+    selectedSessionId !== "active" ? term : undefined,
+    selectedSessionId !== "active" ? academicYear : undefined,
   );
 
   const generateReports = useGenerateReports();
@@ -594,25 +597,23 @@ export default function AcademicsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-text-muted mb-1 uppercase tracking-wide">Term</label>
+            <label className="block text-xs font-semibold text-text-muted mb-1 uppercase tracking-wide">Session</label>
             <select
-              value={term}
-              onChange={(e) => setTerm(e.target.value as ScoreTerm)}
+              value={selectedSessionId}
+              onChange={(e) => setSelectedSessionId(e.target.value)}
               className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600"
             >
-              {TERM_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+              <option value="active">
+                {activeSession
+                  ? `${activeSession.academicYear} — ${activeSession.currentTerm.charAt(0).toUpperCase() + activeSession.currentTerm.slice(1)} Term (Active)`
+                  : "Active session"}
+              </option>
+              {sessions.filter((s) => !s.isActive).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.academicYear} — {s.currentTerm.charAt(0).toUpperCase() + s.currentTerm.slice(1)} Term
+                </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-text-muted mb-1 uppercase tracking-wide">Academic year</label>
-            <input
-              value={academicYear}
-              onChange={(e) => setAcademicYear(e.target.value)}
-              placeholder="2024/2025"
-              className="h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 w-28"
-            />
           </div>
           {activeTab === "scores" && (
             <div>
@@ -723,9 +724,9 @@ export default function AcademicsPage() {
             <ScoreEntryTable
               classId={selectedClassId}
               subject={selectedSubject!}
-              term={term}
-              academicYear={academicYear}
               readOnly={readOnly}
+              term={selectedSessionId !== "active" ? term : undefined}
+              academicYear={selectedSessionId !== "active" ? academicYear : undefined}
             />
           )}
         </Card>
@@ -766,7 +767,7 @@ export default function AcademicsPage() {
                   size="sm"
                   variant="secondary"
                   loading={generateReports.isPending}
-                  onClick={() => generateReports.mutate({ classId: selectedClassId, term, academicYear })}
+                  onClick={() => generateReports.mutate({ classId: selectedClassId, schoolId: schoolId! })}
                 >
                   <RefreshCw size={13} />
                   Generate
@@ -777,7 +778,7 @@ export default function AcademicsPage() {
                   loading={publishReports.isPending}
                   onClick={() => {
                     if (confirm("This will publish all reports and email a PDF report card to each parent. Continue?")) {
-                      publishReports.mutate({ classId: selectedClassId, term, academicYear });
+                      publishReports.mutate({ classId: selectedClassId, schoolId: schoolId! });
                     }
                   }}
                 >

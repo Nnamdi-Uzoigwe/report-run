@@ -65,7 +65,6 @@ export interface User {
   authProvider:    AuthProvider;
   createdAt:       string;
   updatedAt:       string;
-  lastLoginAt?:    any;
 }
 
 export interface LoginCredentials {
@@ -97,20 +96,46 @@ export interface TokenPair {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ACADEMIC SESSIONS
+// ─────────────────────────────────────────────────────────────
+
+export type Term = "first" | "second" | "third";
+
+export interface AcademicSession {
+  id:           string;
+  schoolId:     string;
+  academicYear: string;
+  currentTerm:  Term;
+  isActive:     boolean;
+  startDate?:   string;
+  endDate?:     string;
+  notes?:       string;
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // SCHOOL
 // ─────────────────────────────────────────────────────────────
 
 export interface School {
-  id:           string;
-  name:         string;
-  currencyCode: string;
-  adminEmail:   string;
-  logoUrl?:     string;
-  address?:     string;
-  phone?:       string;
-  isActive:     boolean;
-  createdAt:    string;
-  updatedAt:    string;
+  id:                      string;
+  name:                    string;
+  currencyCode:            string;
+  adminEmail:              string;
+  logoUrl?:                string;
+  address?:                string;
+  phone?:                  string;
+  // Bank & Paystack split
+  bankAccountNumber?:      string;
+  bankCode?:               string;
+  bankName?:               string;
+  bankAccountName?:        string;
+  paystackSubaccountCode?: string;
+  paystackSubaccountId?:   string;
+  isActive:                boolean;
+  createdAt:               string;
+  updatedAt:               string;
 }
 
 // ─────────────────────────────────────────────────────────────

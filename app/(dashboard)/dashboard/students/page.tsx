@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import {
   useStudents, useCreateStudent, useUpdateStudent,
-  usePreviewExcelImport, useConfirmStudentImport,
+  usePreviewExcelImport, useConfirmStudentImport, useGraduateClass,
 } from "@/lib/queries/students";
 import { useClasses } from "@/lib/queries/classes";
 import { useAuthStore } from "@/lib/store";
@@ -695,12 +695,102 @@ function ImportModal({
   );
 }
 
+// ── Graduate Modal ────────────────────────────────────────────
+
+function GraduateModal({
+  isOpen, onClose, classId, className, studentCount, onConfirm, loading,
+}: {
+  isOpen:        boolean;
+  onClose:       () => void;
+  classId:       string;
+  className:     string;
+  studentCount:  number;
+  onConfirm:     (year: number) => void;
+  loading:       boolean;
+}) {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [error, setError] = useState<string | null>(null);
+
+  function handleConfirm() {
+    if (year < 2000 || year > 2100) {
+      setError("Enter a valid year between 2000 and 2100.");
+      return;
+    }
+    setError(null);
+    onConfirm(year);
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Graduate class"
+      subtitle={`Move all students in ${className} to Alumni`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button loading={loading} onClick={handleConfirm}>
+            🎓 Confirm graduation
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* What will happen */}
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-semibold text-amber-800 mb-2">What will happen:</p>
+          <ul className="text-xs text-amber-700 flex flex-col gap-1">
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              {studentCount} active student{studentCount !== 1 ? "s" : ""} will be moved to the Alumni class
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              They will be marked as graduated and hidden from active lists
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              All their scores, reports and attendance remain accessible
+            </li>
+          </ul>
+        </div>
+
+        {/* Year input */}
+        <div>
+          <label className="block text-xs font-semibold text-text-primary mb-1.5 uppercase tracking-wide">
+            Graduation year <span className="text-error">*</span>
+          </label>
+          <input
+            type="number"
+            min={2000}
+            max={2100}
+            value={year}
+            onChange={(e) => { setYear(Number(e.target.value)); setError(null); }}
+            className="w-full h-10 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 font-mono text-lg"
+          />
+          {error && (
+            <p className="text-xs text-error mt-1.5 flex items-center gap-1">
+              <AlertCircle size={11} /> {error}
+            </p>
+          )}
+          <p className="text-xs text-text-muted mt-1.5">
+            Students will be recorded as the <strong>Class of {year}</strong>.
+          </p>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────
 
 export default function StudentsPage() {
-  const [addModal,     setAddModal    ] = useState(false);
-  const [importModal,  setImportModal ] = useState(false);
-  const [activeStudent,setActiveStudent] = useState<Student | null>(null);
+  const [addModal,        setAddModal       ] = useState(false);
+  const [importModal,     setImportModal    ] = useState(false);
+  const [graduateModal,   setGraduateModal  ] = useState(false);
+  const [activeStudent,   setActiveStudent  ] = useState<Student | null>(null);
   const [search,       setSearch      ] = useState("");
   const [classFilter,  setClassFilter ] = useState("");
 
@@ -708,9 +798,17 @@ export default function StudentsPage() {
   const { can }  = usePermission();
   const readOnly = !can.manageStudents;
 
-  const { data: students = [], isLoading, error } = useStudents();
   const { data: classes  = [] }                   = useClasses();
   const createStudent = useCreateStudent();
+  const graduateClass = useGraduateClass();
+
+  const selectedClass = classes.find((c) => c.id === classFilter);
+  const isAlumniClass = selectedClass?.name === "Alumni";
+
+  const { data: students = [], isLoading, error } = useStudents(
+    classFilter || undefined,
+    isAlumniClass,
+  );
 
   const form = useForm<StudentForm>({ resolver: zodResolver(studentSchema) as any });
 
@@ -722,12 +820,10 @@ export default function StudentsPage() {
 
   const filtered = students.filter((s) => {
     const name = `${s.firstName} ${s.lastName}`.toLowerCase();
-    const matchSearch = !search ||
+    return !search ||
       name.includes(search.toLowerCase()) ||
       (s.admissionNumber ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (s.parentName ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchClass = !classFilter || s.classId === classFilter;
-    return matchSearch && matchClass;
   });
 
   if (isLoading) {
@@ -758,6 +854,15 @@ export default function StudentsPage() {
           action={
             !readOnly ? (
               <div className="flex items-center gap-2">
+                {classFilter && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setGraduateModal(true)}
+                  >
+                    🎓 Graduate class
+                  </Button>
+                )}
                 <Button variant="secondary" size="sm" onClick={() => setImportModal(true)}>
                   <Upload size={14} />
                   Import from spreadsheet
@@ -946,6 +1051,22 @@ export default function StudentsPage() {
 
       {/* Import Modal */}
       <ImportModal isOpen={importModal} onClose={() => setImportModal(false)} classes={classes} />
+
+      {/* Graduate Modal */}
+      <GraduateModal
+        isOpen={graduateModal}
+        onClose={() => setGraduateModal(false)}
+        classId={classFilter}
+        className={selectedClass?.name ?? ""}
+        studentCount={students.filter(s => s.isActive !== false).length}
+        onConfirm={(year) => {
+          graduateClass.mutate(
+            { classId: classFilter, graduationYear: year },
+            { onSuccess: () => setGraduateModal(false) },
+          );
+        }}
+        loading={graduateClass.isPending}
+      />
     </>
   );
 }

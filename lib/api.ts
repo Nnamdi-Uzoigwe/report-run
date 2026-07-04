@@ -35,7 +35,76 @@ import type {
   PaymentMethod,
   FeeDashboardMetrics,
   DunningConfig,
+  AcademicSession,
+  Term,
 } from "@/types";
+
+// ─────────────────────────────────────────────────────────────
+// ACADEMIC SESSIONS
+// ─────────────────────────────────────────────────────────────
+
+export async function getSessions(schoolId: string): Promise<AcademicSession[]> {
+  return clientFetch(`/academic-sessions?schoolId=${schoolId}`);
+}
+
+export async function getActiveAcademicSession(
+  schoolId: string,
+): Promise<AcademicSession | null> {
+  return clientFetch<AcademicSession>(`/academic-sessions/active?schoolId=${schoolId}`).catch(() => null);
+}
+
+export async function createSession(data: {
+  schoolId:     string;
+  academicYear: string;
+  currentTerm:  Term;
+  startDate?:   string;
+  endDate?:     string;
+  notes?:       string;
+}): Promise<AcademicSession> {
+  return clientFetch("/academic-sessions", { method: "POST", body: data });
+}
+
+export async function activateSession(id: string): Promise<AcademicSession> {
+  return clientFetch(`/academic-sessions/${id}/activate`, { method: "POST" });
+}
+
+export async function advanceTerm(id: string): Promise<AcademicSession> {
+  return clientFetch(`/academic-sessions/${id}/advance-term`, { method: "POST" });
+}
+
+export async function updateSession(
+  id:   string,
+  data: Partial<Pick<AcademicSession, "academicYear" | "currentTerm" | "startDate" | "endDate" | "notes">>,
+): Promise<AcademicSession> {
+  return clientFetch(`/academic-sessions/${id}`, { method: "PATCH", body: data });
+}
+
+export async function previewPromotion(data: {
+  schoolId:         string;
+  mappings:         { fromClassId: string; toClassId: string }[];
+  excludeStudentIds?: string[];
+  newSessionId:     string;
+}): Promise<{
+  breakdown:     { fromClass: string; toClass: string; eligible: number; excluded: number }[];
+  totalEligible: number;
+}> {
+  return clientFetch("/promotion/preview", { method: "POST", body: data });
+}
+
+export async function executePromotion(data: {
+  schoolId:         string;
+  mappings:         { fromClassId: string; toClassId: string }[];
+  excludeStudentIds?: string[];
+  newSessionId:     string;
+}): Promise<{
+  totalStudents: number;
+  promoted:      number;
+  excluded:      number;
+  breakdown:     { fromClass: string; toClass: string; studentsCount: number }[];
+  newSession:    { id: string; academicYear: string; currentTerm: string };
+}> {
+  return clientFetch("/promotion/execute", { method: "POST", body: data });
+}
 
 // ─────────────────────────────────────────────────────────────
 // SCHOOL
@@ -47,7 +116,7 @@ export async function getSchool(schoolId: string): Promise<School> {
 
 export async function updateSchool(
   schoolId: string,
-  data: Partial<Pick<School, "name" | "address" | "phone">>
+  data: Partial<Pick<School, "name" | "address" | "phone" | "currencyCode">>
 ): Promise<School> {
   return clientFetch<School>(`/schools/${schoolId}`, {
     method: "PATCH",
@@ -59,7 +128,6 @@ export async function uploadSchoolLogo(
   schoolId: string,
   file: File
 ): Promise<School> {
-  // Logo upload is multipart — bypass the JSON body helper
   const form = new FormData();
   form.append("logo", file);
   return clientFetch<School>(`/schools/${schoolId}/logo`, {
@@ -68,12 +136,39 @@ export async function uploadSchoolLogo(
   });
 }
 
+export async function listBanks(): Promise<{ name: string; code: string; slug: string }[]> {
+  return clientFetch("/schools/banks/list");
+}
+
+export async function verifyBankAccount(
+  accountNumber: string,
+  bankCode: string,
+): Promise<{ accountName: string; accountNumber: string }> {
+  return clientFetch(
+    `/schools/banks/verify?accountNumber=${accountNumber}&bankCode=${bankCode}`,
+  );
+}
+
+export async function saveBankAccount(
+  schoolId:      string,
+  accountNumber: string,
+  bankCode:      string,
+  bankName:      string,
+  accountName:   string,
+): Promise<School> {
+  return clientFetch<School>(`/schools/${schoolId}/bank-account`, {
+    method: "POST",
+    body:   { accountNumber, bankCode, bankName, accountName },
+  });
+}
+
 // ─────────────────────────────────────────────────────────────
 // SUBSCRIPTIONS & PLANS
 // ─────────────────────────────────────────────────────────────
 
-export async function getPlans(): Promise<Plan[]> {
-  return clientFetch<Plan[]>("/subscriptions/plans");
+export async function getPlans(billingCycle?: "monthly" | "annually"): Promise<Plan[]> {
+  const params = billingCycle ? `?billingCycle=${billingCycle}` : "";
+  return clientFetch<Plan[]>(`/subscriptions/plans${params}`);
 }
 
 export async function getActiveSubscription(
@@ -291,11 +386,13 @@ export async function deleteGradingScheme(schemeId: string): Promise<void> {
 // ─────────────────────────────────────────────────────────────
 
 export async function getStudents(
-  schoolId: string,
-  classId?: string
+  schoolId:        string,
+  classId?:        string,
+  includeInactive?: boolean,
 ): Promise<Student[]> {
   const params = new URLSearchParams({ schoolId });
-  if (classId) params.set("classId", classId);
+  if (classId)        params.set("classId", classId);
+  if (includeInactive) params.set("includeInactive", "true");
   return clientFetch<Student[]>(`/students?${params.toString()}`);
 }
 
@@ -320,6 +417,17 @@ export async function updateStudent(
     method: "PATCH",
     body: data,
   });
+}
+
+export async function graduateClass(
+  classId:        string,
+  schoolId:       string,
+  graduationYear: number,
+): Promise<{ graduated: number; alumniClassId: string }> {
+  return clientFetch(
+    `/students/graduate-class?classId=${classId}&schoolId=${schoolId}&graduationYear=${graduationYear}`,
+    { method: "POST" },
+  );
 }
 
 export async function deactivateStudent(studentId: string): Promise<Student> {
@@ -460,34 +568,51 @@ export async function getAttendanceStats(
 // SCORES
 // ─────────────────────────────────────────────────────────────
 
+export async function getClassRoster(
+  subjectId:    string,
+  classId:      string,
+  schoolId:     string,
+  term?:        string,
+  academicYear?: string,
+): Promise<{
+  studentId:       string;
+  firstName:       string;
+  lastName:        string;
+  admissionNumber: string | null;
+  caScore:         number | null;
+  examScore:       number | null;
+  totalScore:      number | null;
+  grade:           string | null;
+}[]> {
+  const params = new URLSearchParams({ subjectId, classId, schoolId });
+  if (term)         params.set("term", term);
+  if (academicYear) params.set("academicYear", academicYear);
+  return clientFetch(`/scores/class-roster?${params.toString()}`);
+}
+
 export async function getScoresBySubject(
   subjectId: string,
-  term: ScoreTerm,
-  academicYear: string
+  schoolId:  string,
 ): Promise<Score[]> {
-  const params = new URLSearchParams({ subjectId, term, academicYear });
+  // term and academicYear omitted — backend auto-resolves from active session
+  const params = new URLSearchParams({ subjectId, schoolId });
   return clientFetch<Score[]>(`/scores/by-subject?${params.toString()}`);
 }
 
 export async function getScoresByStudent(
   studentId: string,
-  term: ScoreTerm,
-  academicYear: string
+  schoolId:  string,
 ): Promise<Score[]> {
-  const params = new URLSearchParams({ studentId, term, academicYear });
+  const params = new URLSearchParams({ studentId, schoolId });
   return clientFetch<Score[]>(`/scores/by-student?${params.toString()}`);
 }
 
 export async function submitScores(data: {
   subjectId: string;
-  term: ScoreTerm;
-  academicYear: string;
-  entries: { studentId: string; caScore: number; examScore: number }[];
-}): Promise<{ saved: number }> {
-  return clientFetch<{ saved: number }>("/scores", {
-    method: "POST",
-    body: data,
-  });
+  schoolId:  string;
+  entries:   { studentId: string; caScore: number; examScore: number }[];
+}): Promise<{ saved: number; term: string; academicYear: string }> {
+  return clientFetch("/scores", { method: "POST", body: data });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -495,50 +620,45 @@ export async function submitScores(data: {
 // ─────────────────────────────────────────────────────────────
 
 export async function getReports(
-  classId: string,
-  term: ScoreTerm,
-  academicYear: string
+  classId:       string,
+  schoolId:      string,
+  term?:         string,
+  academicYear?: string,
 ): Promise<Report[]> {
-  const params = new URLSearchParams({ classId, term, academicYear });
+  const params = new URLSearchParams({ classId, schoolId });
+  // Only pass term/year for historical sessions — omit to use active session
+  if (term)         params.set("term",         term);
+  if (academicYear) params.set("academicYear", academicYear);
   return clientFetch<Report[]>(`/reports?${params.toString()}`);
 }
 
 export async function generateReports(data: {
-  classId: string;
-  term: ScoreTerm;
-  academicYear: string;
-}): Promise<{ generated: number }> {
-  return clientFetch<{ generated: number }>("/reports/generate", {
-    method: "POST",
-    body: data,
-  });
+  classId:  string;
+  schoolId: string;
+}): Promise<{ generated: number; term: string; academicYear: string }> {
+  return clientFetch("/reports/generate", { method: "POST", body: data });
 }
 
 export async function updateReportTeacherInput(
   reportId: string,
   data: {
     teacherComment?: string;
-    conduct?: number;
-    punctuality?: number;
-    neatness?: number;
-  }
+    conduct?:        number;
+    punctuality?:    number;
+    neatness?:       number;
+  },
 ): Promise<Report> {
   return clientFetch<Report>(`/reports/${reportId}/teacher-input`, {
     method: "PATCH",
-    body: data,
+    body:   data,
   });
 }
 
 export async function publishReports(
-  classId: string,
-  term: ScoreTerm,
-  academicYear: string
-): Promise<{ published: number }> {
-  const params = new URLSearchParams({ classId, term, academicYear });
-  return clientFetch<{ published: number }>(
-    `/reports/publish?${params.toString()}`,
-    { method: "POST" }
-  );
+classId: string, schoolId: string, p0: any,
+): Promise<{ published: number; emailsSent: number }> {
+  const params = new URLSearchParams({ classId, schoolId });
+  return clientFetch(`/reports/publish?${params.toString()}`, { method: "POST" });
 }
 
 // ─────────────────────────────────────────────────────────────
