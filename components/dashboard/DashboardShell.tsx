@@ -262,7 +262,8 @@ function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 // ── Auth gate — calls useMe safely inside the provider tree ──
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const router             = useRouter();
+  const router               = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isLoading, error } = useMe();
 
   useEffect(() => {
@@ -279,26 +280,27 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  // Sidebar renders here — AFTER useMe() has resolved and schoolId is in store
+  return (
+    <div className="min-h-screen bg-surface-secondary">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="lg:pl-56 flex flex-col min-h-screen">
+        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 p-4 lg:p-6">
+          {children}
+        </main>
+      </div>
+      <SubscriptionSuccessToast />
+    </div>
+  );
 }
 
 // ── Shell ─────────────────────────────────────────────────────
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   return (
     <AuthGate>
-      <div className="min-h-screen bg-surface-secondary">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="lg:pl-56 flex flex-col min-h-screen">
-          <Topbar onMenuClick={() => setSidebarOpen(true)} />
-          <main className="flex-1 p-4 lg:p-6">
-            {children}
-          </main>
-        </div>
-        <SubscriptionSuccessToast />
-      </div>
+      {children}
     </AuthGate>
   );
 }
