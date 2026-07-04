@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, GraduationCap, CreditCard,
   BookOpen, School, Settings, MessageSquare, Menu, X,
-  LogOut, ChevronRight, Loader2, ClipboardList,
+  LogOut, ChevronRight, Loader2, ClipboardList, CalendarDays,
 } from "lucide-react";
+import { useActiveSubscription, useSchool } from "@/lib/queries/school";
+import { useStudents } from "@/lib/queries/students";
 import { classNames } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
 import { useMe, useLogout } from "@/lib/queries/auth";
@@ -32,6 +35,7 @@ const ALL_NAV_ITEMS: {
   { label: "Academics",    href: "/dashboard/academics",  icon: BookOpen,        roles: ["super_admin", "admin", "teacher"] },
   { label: "Classes",      href: "/dashboard/classes",    icon: School,          roles: ["super_admin", "admin"] },
   { label: "Messages",     href: "/dashboard/messages",   icon: MessageSquare,   roles: ["super_admin", "admin"] },
+  { label: "Sessions",    href: "/dashboard/sessions",  icon: CalendarDays,    roles: ["super_admin", "admin"] },
   { label: "Settings",     href: "/dashboard/settings",   icon: Settings,        roles: ["super_admin", "admin"] },
 ];
 
@@ -41,23 +45,57 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const user     = useAuthStore((s) => s.user);
   const role     = useAuthStore((s) => s.role);
+  const schoolId = useAuthStore((s) => s.schoolId);
   const logout   = useLogout();
+
+  const { data: school }        = useSchool();
+  const { data: subscription }  = useActiveSubscription();
+  const { data: students = [] } = useStudents();
+
+  const studentCount = students.length;
+  const studentLimit = subscription?.plan?.studentLimit ?? null;
+  const usagePct     = studentLimit ? Math.min((studentCount / studentLimit) * 100, 100) : 0;
+  const isNearLimit  = studentLimit && studentCount >= studentLimit * 0.9;
+  const isAtLimit    = studentLimit && studentCount >= studentLimit;
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) => !role || item.roles.includes(role)
   );
 
+  // School initials fallback (e.g. "Greenfield Academy" → "GA")
+  const initials = school?.name
+    ? school.name.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "RR";
+
   const content = (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-border shrink-0">
-        <Link href="/dashboard" onClick={onClose} className="flex items-center gap-2 no-underline">
-          <span className="inline-flex items-center justify-center w-7 h-7 bg-navy-600 rounded text-white text-xs font-bold select-none">
-            RR
-          </span>
-          <span className="font-semibold text-text-primary text-sm">ReportRun</span>
+      {/* School info header */}
+      <div className="flex items-center justify-between h-16 px-4 border-b border-border shrink-0">
+        <Link href="/dashboard" onClick={onClose} className="flex items-center gap-2.5 no-underline min-w-0">
+          {/* Logo or initials */}
+          {school?.logoUrl ? (
+            <Image
+              src={school.logoUrl}
+              alt={school.name ?? "School logo"}
+              width={32}
+              height={32}
+              className="rounded object-contain bg-surface border border-border shrink-0"
+            />
+          ) : (
+            <span className="inline-flex items-center justify-center w-8 h-8 bg-navy-600 rounded text-white text-xs font-bold select-none shrink-0">
+              {initials}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-primary truncate leading-tight">
+              {school?.name ?? "ReportRun"}
+            </p>
+            <p className="text-xs text-text-muted truncate leading-tight">
+              {subscription?.plan?.name ?? "Free plan"}
+            </p>
+          </div>
         </Link>
-        <button onClick={onClose} className="lg:hidden p-1 text-text-muted hover:text-text-primary cursor-pointer" aria-label="Close sidebar">
+        <button onClick={onClose} className="lg:hidden p-1 text-text-muted hover:text-text-primary cursor-pointer shrink-0" aria-label="Close sidebar">
           <X size={18} />
         </button>
       </div>
@@ -90,6 +128,60 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           })}
         </ul>
       </nav>
+
+      {/* Student usage bar — only shown to admins with a limited plan */}
+      {studentLimit !== null && (role === "admin" || role === "super_admin") && (
+        <div className="px-3 pb-3 shrink-0">
+          <Link
+            href="/dashboard/settings?tab=subscription"
+            onClick={onClose}
+            className="block no-underline"
+          >
+            <div className={classNames(
+              "rounded-lg p-3 border transition-colors",
+              isAtLimit
+                ? "bg-error-light border-error"
+                : isNearLimit
+                ? "bg-amber-50 border-amber-200"
+                : "bg-surface-secondary border-border",
+            )}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className={classNames(
+                  "text-xs font-semibold",
+                  isAtLimit ? "text-error" : isNearLimit ? "text-amber-700" : "text-text-muted",
+                )}>
+                  {isAtLimit ? "Student limit reached" : "Students"}
+                </p>
+                <p className={classNames(
+                  "text-xs font-bold",
+                  isAtLimit ? "text-error" : isNearLimit ? "text-amber-700" : "text-text-primary",
+                )}>
+                  {studentCount} / {studentLimit.toLocaleString()}
+                </p>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={classNames(
+                    "h-1.5 rounded-full transition-all duration-500",
+                    isAtLimit ? "bg-error" : isNearLimit ? "bg-amber-400" : "bg-navy-600",
+                  )}
+                  style={{ width: `${usagePct}%` }}
+                />
+              </div>
+              {isAtLimit && (
+                <p className="text-xs text-error mt-1.5">
+                  Upgrade to add more students →
+                </p>
+              )}
+              {isNearLimit && !isAtLimit && (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  {studentLimit - studentCount} slots remaining
+                </p>
+              )}
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* User */}
       <div className="border-t border-border p-3 shrink-0">

@@ -10,18 +10,19 @@ import {
   deactivateStudent,
   previewExcelImport,
   confirmStudentImport,
+  graduateClass,
 } from "@/lib/api";
 import { keys } from "./keys";
 import type { Student } from "@/types";
 
 // ── List ──────────────────────────────────────────────────────
 
-export function useStudents(classId?: string) {
+export function useStudents(classId?: string, includeInactive?: boolean) {
   const schoolId = useAuthStore((s) => s.schoolId);
 
   return useQuery({
-    queryKey: keys.students.all(schoolId ?? "", classId),
-    queryFn:  () => getStudents(schoolId!, classId),
+    queryKey: [...keys.students.all(schoolId ?? "", classId), includeInactive ? "all" : "active"],
+    queryFn:  () => getStudents(schoolId!, classId, includeInactive),
     enabled:  !!schoolId,
   });
 }
@@ -121,6 +122,22 @@ export function useConfirmStudentImport() {
       queryClient.invalidateQueries({
         queryKey: keys.students.all(schoolId!),
       });
+    },
+  });
+}
+/**
+ * Graduate all active students in a class — sets isActive = false.
+ * Their historical data remains fully accessible.
+ */
+export function useGraduateClass() {
+  const schoolId    = useAuthStore((s) => s.schoolId);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ classId, graduationYear }: { classId: string; graduationYear: number }) =>
+      graduateClass(classId, schoolId!, graduationYear),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.students.all(schoolId!) });
     },
   });
 }

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
+import { keys } from "@/lib/queries/keys";
 import {
-  Save, School, Bell as _Bell, BookOpen, CreditCard,
+  Save, School, BookOpen, CreditCard,
   Shield, Plus, Trash2, CheckCircle, AlertCircle,
-  Eye, EyeOff, Star,
+  Eye, EyeOff, Star, Building2, Loader2,
 } from "lucide-react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +18,7 @@ import {
 import {
   useSchool, useUpdateSchool, useUploadSchoolLogo,
   useActiveSubscription, usePlans, useInitiateSubscription,
+  useListBanks, useVerifyBankAccount, useSaveBankAccount,
 } from "@/lib/queries/school";
 import {
   useGradingSchemes, useCreateGradingScheme,
@@ -27,6 +31,7 @@ import { changePasswordAction } from "@/lib/actions/auth";
 import { ReadOnlyBanner } from "@/components/dashboard/ReadOnlyBanner";
 import { classNames, formatCurrency } from "@/lib/utils";
 import type { GradeBand } from "@/types";
+import Image from "next/image";
 
 // ── Schemas ───────────────────────────────────────────────────
 
@@ -128,6 +133,7 @@ const TABS = [
   { id: "school",       label: "School Info",       icon: School    },
   { id: "grading",      label: "Grade Scale",        icon: BookOpen  },
   { id: "account",      label: "Account & Security", icon: Shield    },
+  { id: "bank",         label: "Bank Account",       icon: CreditCard},
   { id: "subscription", label: "Subscription",       icon: CreditCard},
 ] as const;
 
@@ -250,23 +256,256 @@ function SchemeEditForm({
   );
 }
 
+// ── Bank Account Section ──────────────────────────────────────
+
+function BankAccountSection({
+  school,
+  readOnly,
+  showToast,
+}: {
+  school:    any;
+  readOnly:  boolean;
+  showToast: (msg: string, type: "success" | "error") => void;
+}) {
+  const [selectedBankCode, setSelectedBankCode] = useState(school?.bankCode ?? "");
+  const [accountNumber,    setAccountNumber    ] = useState(school?.bankAccountNumber ?? "");
+  const [verified,         setVerified         ] = useState<{ accountName: string; accountNumber: string } | null>(
+    school?.bankAccountName ? { accountName: school.bankAccountName, accountNumber: school.bankAccountNumber } : null
+  );
+
+  const { data: banks = [], isLoading: banksLoading } = useListBanks();
+  const verifyAccount  = useVerifyBankAccount();
+  const saveBankAccount = useSaveBankAccount();
+
+  const selectedBank = banks.find((b) => b.code === selectedBankCode);
+
+  async function handleVerify() {
+    if (!accountNumber || accountNumber.length !== 10) {
+      showToast("Enter a valid 10-digit account number.", "error");
+      return;
+    }
+    if (!selectedBankCode) {
+      showToast("Select a bank first.", "error");
+      return;
+    }
+    setVerified(null);
+    try {
+      const result = await verifyAccount.mutateAsync({ accountNumber, bankCode: selectedBankCode });
+      setVerified(result);
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  }
+
+  async function handleSave() {
+    if (!verified || !selectedBank) return;
+    try {
+      await saveBankAccount.mutateAsync({
+        accountNumber: verified.accountNumber,
+        accountName:   verified.accountName,
+        bankCode:      selectedBankCode,
+        bankName:      selectedBank.name,
+      });
+      showToast("Bank account saved. Paystack subaccount created — online payments will now be split automatically.", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  }
+
+  const hasExisting = !!school?.paystackSubaccountCode;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* How it works */}
+      <Card>
+        <CardHeader
+          title="Bank account & payment splitting"
+          subtitle="Add your school's bank account to receive fee payments automatically"
+        />
+        <div className="mt-4 p-4 bg-navy-50 border border-navy-200 rounded-lg">
+          <p className="text-xs font-semibold text-navy-700 mb-2">How online fee payments work:</p>
+          <div className="flex flex-col gap-1.5 text-xs text-navy-600">
+            <div className="flex items-start gap-2">
+              <span className="font-bold shrink-0">Parent pays:</span>
+              <span>Fee amount + 5% platform fee (e.g. ₦50,000 fee → parent pays ₦52,500)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-bold shrink-0">School receives:</span>
+              <span>Exactly ₦50,000 — settled directly to your bank account by Paystack</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-bold shrink-0">ReportRun keeps:</span>
+              <span>5% platform fee (Paystack's 1.5% processing fee is deducted from our share)</span>
+            </div>
+          </div>
+        </div>
+
+        {hasExisting && (
+          <div className="mt-4 flex items-center gap-3 p-3 bg-success-light border border-success rounded-lg">
+            <CheckCircle size={16} className="text-success shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-success">Bank account connected</p>
+              <p className="text-xs text-success">
+                {school.bankAccountName} — {school.bankName} ({school.bankAccountNumber})
+              </p>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Setup form */}
+      <Card>
+        <CardHeader
+          title={hasExisting ? "Update bank account" : "Connect bank account"}
+          subtitle="Enter your account number and we'll verify it with Paystack"
+        />
+        <div className="flex flex-col gap-4 mt-4">
+
+          {/* Bank select */}
+          <div>
+            <label className="block text-xs font-semibold text-text-primary mb-1.5">Bank <span className="text-error">*</span></label>
+            {banksLoading ? (
+              <div className="h-9 bg-surface-tertiary rounded animate-pulse" />
+            ) : (
+              <select
+                value={selectedBankCode}
+                onChange={(e) => { setSelectedBankCode(e.target.value); setVerified(null); }}
+                disabled={readOnly}
+                className="w-full h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 disabled:opacity-60"
+              >
+                <option value="">Select your bank...</option>
+                {banks.map((b) => (
+                  <option key={b.code} value={b.code}>{b.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Account number + verify */}
+          <div>
+            <label className="block text-xs font-semibold text-text-primary mb-1.5">
+              Account number <span className="text-error">*</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                maxLength={10}
+                value={accountNumber}
+                onChange={(e) => { setAccountNumber(e.target.value.replace(/\D/g, "")); setVerified(null); }}
+                disabled={readOnly}
+                placeholder="0123456789"
+                className="flex-1 h-9 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 disabled:opacity-60 font-mono tracking-widest"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={verifyAccount.isPending}
+                disabled={readOnly || accountNumber.length !== 10 || !selectedBankCode}
+                onClick={handleVerify}
+              >
+                Verify
+              </Button>
+            </div>
+            <p className="text-xs text-text-muted mt-1">Must be exactly 10 digits</p>
+          </div>
+
+          {/* Verification result */}
+          {verifyAccount.isPending && (
+            <div className="flex items-center gap-2 text-sm text-text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              Verifying with Paystack...
+            </div>
+          )}
+
+          {verified && (
+            <div className="flex items-center justify-between p-4 bg-success-light border border-success rounded-lg">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={15} className="text-success" />
+                  <p className="text-sm font-semibold text-success">Account verified</p>
+                </div>
+                <p className="text-sm text-success mt-1">
+                  <span className="font-bold">{verified.accountName}</span>
+                  <span className="text-xs ml-2 opacity-70">({verified.accountNumber})</span>
+                </p>
+                <p className="text-xs text-success mt-0.5 opacity-80">
+                  Confirm this is your school's account before saving.
+                </p>
+              </div>
+              {!readOnly && (
+                <Button
+                  loading={saveBankAccount.isPending}
+                  onClick={handleSave}
+                >
+                  {hasExisting ? "Update account" : "Save & connect"}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {verifyAccount.isError && (
+            <div className="flex items-center gap-2 p-3 bg-error-light border border-error rounded text-sm text-error">
+              <AlertCircle size={14} className="shrink-0" />
+              {(verifyAccount.error as Error).message}
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── PAGE ──────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [activeTab,    setActiveTab   ] = useState<TabId>("school");
-  const [toast,        setToast       ] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [showNewScheme,setShowNewScheme] = useState(false);
+  const [activeTab,       setActiveTab      ] = useState<TabId>("school");
+  const [toast,           setToast          ] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showNewScheme,   setShowNewScheme  ] = useState(false);
   const [editingSchemeId, setEditingSchemeId] = useState<string | null>(null);
-  const [showPwd,      setShowPwd     ] = useState({ current: false, new: false, confirm: false });
+  const [showPwd,         setShowPwd        ] = useState({ current: false, new: false, confirm: false });
+  const [billingCycle,    setBillingCycle   ] = useState<"monthly" | "annually">("monthly");
+
+  // Verify payment and activate subscription when redirected back from Paystack
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("subscription") === "success") {
+      const reference = params.get("reference");
+      setActiveTab("subscription");
+      // Clean URL first
+      window.history.replaceState({}, "", window.location.pathname);
+
+      if (reference) {
+        // Call backend to verify and activate — this sets startsAt and expiresAt
+        clientFetch(`/subscriptions/verify/${reference}`, { method: "POST" })
+          .then(() => {
+            showToast("Subscription activated! Your plan is now active.", "success");
+            queryClient.invalidateQueries({ queryKey: keys.subscription.active(schoolId!) });
+          })
+          .catch(() => {
+            showToast("Payment received — your plan will activate shortly.", "success");
+          });
+      } else {
+        showToast("Payment received — your plan will activate shortly.", "success");
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bank account state
+  const [selectedBankCode, setSelectedBankCode] = useState("");
+  const [accountNumber,    setAccountNumber    ] = useState("");
+  const [verifiedName,     setVerifiedName     ] = useState<string | null>(null);
 
   const { can }  = usePermission();
   const readOnly = !can.manageSettings;
   const user     = useAuthStore((s) => s.user);
+  const schoolId = useAuthStore((s) => s.schoolId);
+  const queryClient = useQueryClient();
 
   // Data
   const { data: school,        isLoading: schoolLoading  } = useSchool();
   const { data: subscription                             } = useActiveSubscription();
-  const { data: plans    = []                            } = usePlans();
+  const { data: plans    = []                            } = usePlans(billingCycle);
   const { data: schemes  = [], isLoading: schemesLoading } = useGradingSchemes();
 
   // Mutations
@@ -493,11 +732,14 @@ export default function SettingsPage() {
                   </label>
                   <div className="flex items-center gap-4">
                     {school?.logoUrl ? (
-                      <img
-                        src={school.logoUrl}
-                        alt="School logo"
-                        className="w-16 h-16 object-contain border border-border rounded-lg bg-surface"
-                      />
+                     <div className="relative w-16 h-16 border border-border rounded-lg bg-surface overflow-hidden">
+                    <Image
+                      src={school.logoUrl}
+                      alt="School logo"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
                     ) : (
                       <div className="w-16 h-16 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-surface-secondary">
                         <School size={20} className="text-text-muted" />
@@ -823,54 +1065,180 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* ── BANK & PAYMENTS ── */}
+          {activeTab === "bank" && (
+            <BankAccountSection school={school} readOnly={readOnly} showToast={showToast} />
+          )}
+
           {/* ── SUBSCRIPTION ── */}
           {activeTab === "subscription" && (
             <div className="flex flex-col gap-4">
               {/* Current plan */}
               {subscription && (
                 <Card>
-                  <CardHeader title="Current subscription" />
-                  <div className="flex flex-col gap-3 mt-4">
-                    <div className="flex items-center justify-between p-4 bg-navy-50 border border-navy-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-bold text-navy-700">{subscription.plan.name}</p>
-                        <p className="text-xs text-navy-600 mt-0.5">
-                          {subscription.plan.studentLimit
-                            ? `Up to ${subscription.plan.studentLimit} students`
-                            : "Unlimited students"}
-                        </p>
+                  <CardHeader
+                    title="Current subscription"
+                    subtitle="Your active plan and usage"
+                  />
+                  <div className="flex flex-col gap-4 mt-4">
+
+                    {/* Plan header */}
+                    <div className="flex items-center justify-between p-4 bg-navy-50 border border-navy-200 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-navy-600 rounded-lg flex items-center justify-center shrink-0">
+                          <Star size={16} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="text-base font-bold text-navy-700">
+                            {subscription.plan.name}
+                          </p>
+                          <p className="text-xs text-navy-500 capitalize mt-0.5">
+                            {subscription.plan.billingCycle ?? "one-time"} billing
+                          </p>
+                        </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-navy-700">
+                        <p className="text-lg font-bold text-navy-700">
                           {Number(subscription.plan.priceKobo) === 0
                             ? "Free"
                             : formatCurrency(Number(subscription.plan.priceKobo) / 100)}
                         </p>
-                        {subscription.plan.billingCycle && (
-                          <p className="text-xs text-navy-600">per {subscription.plan.billingCycle}</p>
+                        {Number(subscription.plan.priceKobo) > 0 && (
+                          <p className="text-xs text-navy-500">
+                            per {subscription.plan.billingCycle === "annually" ? "year" : "month"}
+                          </p>
                         )}
                       </div>
                     </div>
-                    {subscription.expiresAt && (
-                      <p className="text-xs text-text-muted">
-                        Renews on {new Date(subscription.expiresAt).toLocaleDateString("en-NG", {
-                          day: "numeric", month: "long", year: "numeric",
-                        })}
-                      </p>
+
+                    {/* Plan limits */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 border border-border rounded-lg">
+                        <p className="text-xs text-text-muted mb-1">Students</p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {subscription.plan.studentLimit
+                            ? `Up to ${subscription.plan.studentLimit.toLocaleString()}`
+                            : "Unlimited"}
+                        </p>
+                      </div>
+                      <div className="p-3 border border-border rounded-lg">
+                        <p className="text-xs text-text-muted mb-1">Staff accounts</p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {subscription.plan.staffLimit
+                            ? `Up to ${subscription.plan.staffLimit}`
+                            : "Unlimited"}
+                        </p>
+                      </div>
+                      <div className="p-3 border border-border rounded-lg">
+                        <p className="text-xs text-text-muted mb-1">Started</p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {subscription.startsAt
+                            ? new Date(subscription.startsAt).toLocaleDateString("en-NG", {
+                                day: "numeric", month: "short", year: "numeric",
+                              })
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="p-3 border border-border rounded-lg">
+                        <p className="text-xs text-text-muted mb-1">
+                          {subscription.expiresAt ? "Renews" : "Expires"}
+                        </p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {subscription.expiresAt
+                            ? new Date(subscription.expiresAt).toLocaleDateString("en-NG", {
+                                day: "numeric", month: "short", year: "numeric",
+                              })
+                            : "Never"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Features list */}
+                    {subscription.plan.highlights?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">
+                          What&apos;s included
+                        </p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {subscription.plan.highlights.map((h: string) => (
+                            <div key={h} className="flex items-center gap-2 text-xs text-text-secondary">
+                              <CheckCircle size={12} className="text-success shrink-0" />
+                              {h}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
+
+                    {/* Status badge */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-success" />
+                        <p className="text-xs text-text-muted capitalize">
+                          Status: <span className="text-success font-semibold">{subscription.status}</span>
+                        </p>
+                      </div>
+                      {subscription.expiresAt && (
+                        <p className="text-xs text-text-muted">
+                          {Math.max(0, Math.ceil(
+                            (new Date(subscription.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                          ))} days remaining
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {!subscription && (
+                <Card>
+                  <div className="text-center py-8">
+                    <Star size={28} className="text-text-muted mx-auto mb-2" />
+                    <p className="text-sm font-medium text-text-primary">No active subscription</p>
+                    <p className="text-xs text-text-muted mt-1">Choose a plan below to get started.</p>
                   </div>
                 </Card>
               )}
 
               {/* Available plans */}
               <Card>
-                <CardHeader
-                  title="Available plans"
-                  subtitle="Upgrade or change your plan at any time"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <CardHeader
+                    title="Available plans"
+                    subtitle="Upgrade or change your plan at any time"
+                  />
+                  {/* Monthly / Yearly toggle */}
+                  <div className="flex items-center gap-1 bg-surface-secondary border border-border rounded-lg p-1 shrink-0">
+                    {(["monthly", "annually"] as const).map((cycle) => (
+                      <button
+                        key={cycle}
+                        onClick={() => setBillingCycle(cycle)}
+                        className={classNames(
+                          "px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer",
+                          billingCycle === cycle
+                            ? "bg-navy-600 text-white"
+                            : "text-text-muted hover:text-text-primary",
+                        )}
+                      >
+                        {cycle === "monthly" ? "Monthly" : "Yearly"}
+                        {cycle === "annually" && (
+                          <span className="ml-1.5 text-xs bg-gold-100 text-gold-700 px-1.5 py-0.5 rounded-full font-bold">
+                            Save 20%
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex flex-col gap-3 mt-4">
                   {plans.map((plan) => {
-                    const isCurrent = subscription?.plan?.id === plan.id;
+                    const isCurrent      = subscription?.plan?.id === plan.id;
+                    const currentPrice   = Number(subscription?.plan?.priceKobo ?? 0);
+                    const thisPlanPrice  = Number(plan.priceKobo);
+                    const isUpgrade      = thisPlanPrice > currentPrice;
+                    const isDowngrade    = thisPlanPrice < currentPrice && thisPlanPrice > 0;
+                    const isFree         = thisPlanPrice === 0 && !plan.isCustom;
+
                     return (
                       <div
                         key={plan.id}
@@ -882,7 +1250,7 @@ export default function SettingsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <p className="text-sm font-semibold text-text-primary">{plan.name}</p>
-                            {isCurrent && <Badge label="Current" variant="navy" />}
+                            {isCurrent && <Badge label="Current plan" variant="navy" />}
                           </div>
                           <p className="text-xs text-text-muted">
                             {plan.studentLimit ? `Up to ${plan.studentLimit} students` : "Unlimited students"}
@@ -892,24 +1260,39 @@ export default function SettingsPage() {
                           ))}
                         </div>
                         <div className="text-right ml-4 shrink-0">
-                          <p className="text-sm font-bold text-text-primary">
-                            {Number(plan.priceKobo) === 0
-                              ? "Free"
-                              : plan.isCustom
-                              ? "Custom"
-                              : formatCurrency(Number(plan.priceKobo) / 100)}
-                          </p>
+                          {/* Price */}
+                          {!plan.isCustom && (
+                            <p className="text-sm font-bold text-text-primary">
+                              {isFree
+                                ? "Free"
+                                : formatCurrency(thisPlanPrice / 100)}
+                              {!isFree && (
+                                <span className="text-xs font-normal text-text-muted ml-1">
+                                  /{billingCycle === "annually" ? "yr" : "mo"}
+                                </span>
+                              )}
+                            </p>
+                          )}
+
+                          {/* Current plan — just a text label, no button */}
+                          {isCurrent && (
+                            <p className="text-xs text-navy-600 font-semibold mt-1.5">Current plan</p>
+                          )}
+
+                          {/* Action button — only for non-current plans */}
                           {!isCurrent && !readOnly && (
                             <Button
                               size="sm"
+                              variant={isDowngrade ? "secondary" : "primary"}
                               className="mt-2"
                               loading={initiateSub.isPending}
                               onClick={() => {
                                 if (plan.isCustom) {
-                                  window.location.href = "/contact";
-                                } else if (Number(plan.priceKobo) === 0) {
-                                  showToast("You are already on the best free plan.", "success");
+                                  window.open("mailto:hello@novtryx.com?subject=ReportRun Custom Plan", "_blank");
+                                } else if (isFree) {
+                                  showToast("Contact support to downgrade to the free plan.", "success");
                                 } else {
+                                  if (isDowngrade && !confirm(`Downgrade to ${plan.name}? Your current plan remains active until it expires.`)) return;
                                   initiateSub.mutate(plan.id, {
                                     onSuccess: (d) => { window.location.href = d.authorizationUrl; },
                                     onError:   (e) => showToast((e as Error).message, "error"),
@@ -917,7 +1300,7 @@ export default function SettingsPage() {
                                 }
                               }}
                             >
-                              {plan.isCustom ? "Contact us" : "Upgrade"}
+                              {plan.isCustom ? "Contact us" : isUpgrade ? "Upgrade" : "Downgrade"}
                             </Button>
                           )}
                         </div>
