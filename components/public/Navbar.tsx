@@ -196,7 +196,7 @@ export function Navbar() {
                 >
                   Sign in
                 </Link>
-                <Link href="/contact">
+                <Link href="/setup">
                   <Button size="sm">Get started</Button>
                 </Link>
               </>
@@ -251,7 +251,7 @@ export function Navbar() {
                   >
                     Sign in
                   </Link>
-                  <Link href="/contact" onClick={() => setOpen(false)}>
+                  <Link href="/setup" onClick={() => setOpen(false)}>
                     <Button size="sm" fullWidth>
                       Get started
                     </Button>
