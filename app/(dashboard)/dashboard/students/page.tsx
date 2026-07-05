@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Plus, Search, GraduationCap, Upload, Download,
   X, AlertCircle, CheckCircle, Eye,
@@ -826,6 +826,14 @@ export default function StudentsPage() {
       (s.parentName ?? "").toLowerCase().includes(search.toLowerCase());
   });
 
+  const PAGE_SIZE                   = 20;
+  const [page, setPage]             = useState(1);
+  const totalPages                  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated                   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Reset to page 1 when search or filter changes
+  useEffect(() => { setPage(1); }, [search, classFilter]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -950,7 +958,7 @@ export default function StudentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((student, i) => {
+                  {paginated.map((student, i) => {
                     const isActive = activeStudent?.id === student.id;
                     return (
                       <tr
@@ -1003,6 +1011,70 @@ export default function StudentsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <p className="text-xs text-text-muted">
+                Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} students
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-text-muted">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p as number)}
+                        className={classNames(
+                          "px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer",
+                          page === p
+                            ? "bg-navy-600 text-white border-navy-600 font-semibold"
+                            : "border-border hover:bg-surface-secondary text-text-primary",
+                        )}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer"
+                >
+                  ›
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer"
+                >
+                  »
+                </button>
+              </div>
             </div>
           )}
         </Card>
