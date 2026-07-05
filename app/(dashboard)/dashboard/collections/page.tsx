@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus, Search, CreditCard, ChevronDown,
   ChevronRight, Mail, FileText, Loader2,
@@ -397,6 +397,13 @@ export default function CollectionsPage() {
     );
   });
 
+  const PAGE_SIZE    = 20;
+  const [page, setPage] = useState(1);
+  const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated    = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
   const isLoading = metricsLoading || invoicesLoading;
 
   if (isLoading) {
@@ -537,7 +544,7 @@ export default function CollectionsPage() {
               />
             ) : (
               <div>
-                {filtered.map((inv) => (
+                {paginated.map((inv) => (
                   <InvoiceRow
                     key={inv.id}
                     invoice={inv}
@@ -545,6 +552,47 @@ export default function CollectionsPage() {
                     readOnly={readOnly}
                   />
                 ))}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                    <p className="text-xs text-text-muted">
+                      Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} invoices
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPage(1)} disabled={page === 1}
+                        className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer">«</button>
+                      <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                        className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer">‹</button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                        .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                          if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((p, idx) =>
+                          p === "..." ? (
+                            <span key={`e-${idx}`} className="px-2 py-1 text-xs text-text-muted">…</span>
+                          ) : (
+                            <button key={p} onClick={() => setPage(p as number)}
+                              className={classNames(
+                                "px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer",
+                                page === p
+                                  ? "bg-navy-600 text-white border-navy-600 font-semibold"
+                                  : "border-border hover:bg-surface-secondary text-text-primary",
+                              )}>
+                              {p}
+                            </button>
+                          )
+                        )}
+                      <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                        className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer">›</button>
+                      <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                        className="px-2 py-1 text-xs rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-secondary cursor-pointer">»</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>
