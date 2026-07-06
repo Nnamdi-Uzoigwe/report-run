@@ -17,6 +17,10 @@ const PUBLIC_PATHS = new Set([
   "/email-verified",
   "/pay",
   "/pay/success",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/cookie-policy",
+  "/data-processing-agreement",
 ]);
 
 // Paths that authenticated users should be bounced away from
