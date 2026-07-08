@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode, type ChangeEvent } from "react";
 import {
   Plus, Search, GraduationCap, Upload, Download,
-  X, AlertCircle, CheckCircle, Eye,
+  X, AlertCircle, CheckCircle, Eye, Trash2, Printer,
   FileSpreadsheet, ChevronRight, Pencil,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -14,9 +14,10 @@ import {
   Button, Modal, Input, EmptyState,
 } from "@/components/ui";
 import {
-  useStudents, useCreateStudent, useUpdateStudent,
+  useStudents, useCreateStudent, useUpdateStudent, useDeactivateStudent,
   usePreviewExcelImport, useConfirmStudentImport, useGraduateClass,
 } from "@/lib/queries/students";
+import { useActiveSubscription } from "@/lib/queries/school";
 import { useClasses } from "@/lib/queries/classes";
 import { useAuthStore } from "@/lib/store";
 import { usePermission } from "@/lib/hooks/usePermission";
@@ -258,10 +259,12 @@ function StudentPanel({
   classes:  { id: string; name: string }[];
   readOnly: boolean;
 }) {
-  const [tab,   setTab  ] = useState<"details" | "edit">("details");
-  const [saved, setSaved ] = useState(false);
-  const [error, setError ] = useState<string | null>(null);
-  const updateStudent = useUpdateStudent();
+  const [tab,       setTab      ] = useState<"details" | "edit">("details");
+  const [saved,     setSaved    ] = useState(false);
+  const [error,     setError    ] = useState<string | null>(null);
+  const [deleting,  setDeleting ] = useState(false);
+  const updateStudent    = useUpdateStudent();
+  const deactivateStudent = useDeactivateStudent();
 
   const form = useForm<StudentForm>({
     resolver:      zodResolver(studentSchema) as any,
@@ -307,6 +310,21 @@ function StudentPanel({
     }
   }
 
+  async function handleDelete() {
+    if (!confirm(
+      `Remove ${student.firstName} ${student.lastName} from active students?\n\n` +
+      `Their historical scores and reports will remain accessible.`
+    )) return;
+    setDeleting(true);
+    try {
+      await deactivateStudent.mutateAsync(student.id);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+      setDeleting(false);
+    }
+  }
+
   const cls = classes.find((c) => c.id === student.classId);
 
   function InfoRow({ label, value, cap }: { label: string; value?: string; cap?: boolean }) {
@@ -321,7 +339,7 @@ function StudentPanel({
     );
   }
 
-  function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  function Section({ title, children }: { title: string; children: ReactNode }) {
     return (
       <div>
         <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">{title}</p>
@@ -351,9 +369,21 @@ function StudentPanel({
             </p>
           </div>
         </div>
-        <button onClick={onClose} className="p-1.5 rounded hover:bg-surface-secondary text-text-muted cursor-pointer">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          {!readOnly && student.isActive && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Remove student"
+              className="p-1.5 rounded hover:bg-error-light text-text-muted hover:text-error cursor-pointer transition-colors disabled:opacity-40"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-surface-secondary text-text-muted cursor-pointer">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -477,7 +507,7 @@ function ImportModal({
   const previewImport = usePreviewExcelImport();
   const confirmImport = useConfirmStudentImport();
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     if (!classId) { setError("Please select a class first."); return; }
@@ -798,6 +828,9 @@ export default function StudentsPage() {
   const { can }  = usePermission();
   const readOnly = !can.manageStudents;
 
+  const { data: subscription } = useActiveSubscription();
+  const studentLimit = subscription?.plan?.studentLimit ?? null;
+
   const { data: classes  = [] }                   = useClasses();
   const createStudent = useCreateStudent();
   const graduateClass = useGraduateClass();
@@ -809,6 +842,8 @@ export default function StudentsPage() {
     classFilter || undefined,
     isAlumniClass,
   );
+
+  const isAtLimit = studentLimit !== null && students.length >= studentLimit;
 
   const form = useForm<StudentForm>({ resolver: zodResolver(studentSchema) as any });
 
@@ -860,27 +895,85 @@ export default function StudentsPage() {
           title="Students"
           subtitle={`${students.length} students enrolled`}
           action={
-            !readOnly ? (
-              <div className="flex items-center gap-2">
-                {classFilter && (
+            <div className="flex items-center gap-2">
+              {/* Print class list — visible to all when a class is selected */}
+              {classFilter && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const params = new URLSearchParams({
+                        classId:   classFilter,
+                        schoolId:  schoolId!,
+                        className: selectedClass?.name ?? "Class",
+                      });
+                      const base = process.env.NEXT_PUBLIC_API_URL
+                        ?? "https://school-mgt-server.vercel.app/api/v1";
+                      const token = document.cookie
+                        .split("; ")
+                        .find((c) => c.startsWith("rr_access="))
+                        ?.split("=")[1];
+                      const res = await fetch(
+                        `${base}/students/export/class-list?${params.toString()}`,
+                        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+                      );
+                      if (!res.ok) throw new Error("Failed");
+                      const blob = await res.blob();
+                      const url  = URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.href     = url;
+                      link.download = `students_${selectedClass?.name ?? "class"}.pdf`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      alert("Failed to generate class list. Please try again.");
+                    }
+                  }}
+                >
+                  <Printer size={14} />
+                  Print class list
+                </Button>
+              )}
+
+              {!readOnly && (
+                <>
+                  {classFilter && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setGraduateModal(true)}
+                    >
+                      🎓 Graduate class
+                    </Button>
+                  )}
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setGraduateModal(true)}
+                    title={isAtLimit ? `Student limit of ${studentLimit} reached — upgrade to add more` : undefined}
+                    onClick={() => {
+                      if (isAtLimit) {
+                        alert(`You've reached your plan limit of ${studentLimit} students.\nUpgrade your subscription to add more.`);
+                        return;
+                      }
+                      setImportModal(true);
+                    }}
                   >
-                    🎓 Graduate class
+                    <Upload size={14} />
+                    Import from spreadsheet
                   </Button>
-                )}
-                <Button variant="secondary" size="sm" onClick={() => setImportModal(true)}>
-                  <Upload size={14} />
-                  Import from spreadsheet
-                </Button>
-                <Button size="sm" onClick={() => setAddModal(true)}>
-                  <Plus size={14} />
-                  Add student
-                </Button>
-              </div>
-            ) : undefined
+                  <Button
+                    size="sm"
+                    disabled={!!isAtLimit}
+                    title={isAtLimit ? `Student limit of ${studentLimit} reached — upgrade to add more` : undefined}
+                    onClick={() => !isAtLimit && setAddModal(true)}
+                  >
+                    <Plus size={14} />
+                    {isAtLimit ? "Limit reached" : "Add student"}
+                  </Button>
+                </>
+              )}
+            </div>
           }
         />
 

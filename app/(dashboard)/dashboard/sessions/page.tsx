@@ -3,8 +3,7 @@
 import { useState } from "react";
 import {
   CalendarDays, Plus, CheckCircle,
-  AlertCircle, ArrowRight, Users,
-  RefreshCw,
+  AlertCircle, ArrowRight, Users, RefreshCw,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,7 +129,7 @@ function CreateSessionModal({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input label="Start date" type="date" {...register("startDate")} />
           <Input label="End date"   type="date" {...register("endDate")} />
         </div>
@@ -309,7 +308,7 @@ function PromotionWizard({
 
               <div className="flex flex-col gap-2">
                 {mappings.map((m, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                  <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <select
                       value={m.fromClassId}
                       onChange={(e) => updateMapping(idx, "fromClassId", e.target.value)}
@@ -320,7 +319,7 @@ function PromotionWizard({
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
-                    <ArrowRight size={14} className="text-text-muted shrink-0" />
+                    <ArrowRight size={14} className="text-text-muted shrink-0 self-center rotate-90 sm:rotate-0" />
                     <select
                       value={m.toClassId}
                       onChange={(e) => updateMapping(idx, "toClassId", e.target.value)}
@@ -334,7 +333,7 @@ function PromotionWizard({
                     {mappings.length > 1 && (
                       <button
                         onClick={() => removeMapping(idx)}
-                        className="text-text-muted hover:text-error cursor-pointer text-xs"
+                        className="text-text-muted hover:text-error cursor-pointer text-xs self-center"
                       >
                         ✕
                       </button>
@@ -511,7 +510,7 @@ function SessionCard({
         )}
       </div>
 
-      <div className="grid grid-cols-3 divide-x divide-border text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 sm:divide-x divide-border text-xs">
         <div className="px-4 py-2.5">
           <p className="text-text-muted mb-0.5">Start date</p>
           <p className="font-medium text-text-primary">{formatDate(session.startDate)}</p>
@@ -564,7 +563,7 @@ export default function SessionsPage() {
           : "No active session — create one to start recording scores"}
         action={
           canManage ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {active?.currentTerm === "third" && (
                 <Button
                   variant="secondary"

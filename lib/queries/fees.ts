@@ -138,9 +138,11 @@ export function useRecordPayment() {
       reference?:    string;
       recordedBy?:   string;
       note?:         string;
-    }) => recordPayment(data),
+    }) => recordPayment({ ...data, amount: Number(data.amount) }),  // ensure number
     onSuccess: (result) => {
+      // Update the specific invoice in cache immediately
       queryClient.setQueryData(keys.fees.invoice(result.invoice.id), result.invoice);
+      // Use prefix invalidation to catch all filter variants of the invoices list
       queryClient.invalidateQueries({ queryKey: ["fees", "invoices", schoolId!] });
       queryClient.invalidateQueries({ queryKey: keys.fees.dashboard(schoolId!) });
       queryClient.invalidateQueries({ queryKey: keys.fees.payments(result.invoice.id) });
