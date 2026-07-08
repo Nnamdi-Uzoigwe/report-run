@@ -464,7 +464,7 @@ export default function AcademicsPage() {
   const [selectedSubjectId, setSelectedSubjectId ] = useState("");
   const [selectedSessionId, setSelectedSessionId ] = useState("active");
 
-  const [exporting, setExporting] = useState<"scores" | "transcript" | null>(null);
+  const [exporting, setExporting] = useState<"scores" | "transcript" | "bulk" | null>(null);
 
   const schoolId = useAuthStore((s) => s.schoolId);
 
@@ -574,11 +574,6 @@ export default function AcademicsPage() {
       {readOnly && (
         <ReadOnlyBanner message="Only admins and teachers can enter scores." />
       )}
-
-      <PageHeader
-        title="Academics & Results"
-        subtitle="Score entry, report generation and publishing"
-      />
 
       {/* Filters */}
       <Card padding="sm">
@@ -763,6 +758,32 @@ export default function AcademicsPage() {
                     Export transcript
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={exporting === "bulk"}
+                  onClick={async () => {
+                    setExporting("bulk");
+                    try {
+                      const params = new URLSearchParams({
+                        classId:  selectedClassId,
+                        schoolId: schoolId!,
+                        ...(selectedSessionId !== "active" && term        ? { term }         : {}),
+                        ...(selectedSessionId !== "active" && academicYear ? { academicYear } : {}),
+                      });
+                      const className = availableClasses.find((c) => c.id === selectedClassId)?.name ?? "class";
+                      await downloadExcel(
+                        `/reports/export/bulk-cards?${params.toString()}`,
+                        `report_cards_${className}.pdf`,
+                      );
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                >
+                  <Printer size={13} />
+                  Print all cards
+                </Button>
                 <Button
                   size="sm"
                   variant="secondary"

@@ -176,50 +176,45 @@ function InvoiceRow({
     <div className="border-b border-border last:border-0">
       {/* Main row */}
       <div
-        className="flex items-center gap-4 px-5 py-3 hover:bg-surface-secondary transition-colors cursor-pointer"
+        className="flex items-center gap-3 px-4 py-3 hover:bg-surface-secondary transition-colors cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <button className="text-text-muted shrink-0">
-          {expanded
-            ? <ChevronDown size={15} />
-            : <ChevronRight size={15} />
-          }
+          {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
         </button>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-sm font-medium text-text-primary truncate">
             {invoice.student.firstName} {invoice.student.lastName}
           </p>
           <p className="text-xs text-text-muted">
             {invoice.student.admissionNumber ?? "—"} · {invoice.termLabel}
           </p>
+          {/* Balance visible on mobile */}
+          <p className="text-xs font-medium text-error sm:hidden mt-0.5">
+            Bal: {formatCurrency(Number(invoice.balance))}
+          </p>
         </div>
 
+        {/* Amount columns — hidden on mobile */}
         <div className="hidden sm:flex items-center gap-6 shrink-0 text-sm">
           <div className="text-right">
             <p className="text-xs text-text-muted">Total</p>
-            <p className="font-medium text-text-primary">
-              {formatCurrency(Number(invoice.totalAmount))}
-            </p>
+            <p className="font-medium text-text-primary">{formatCurrency(Number(invoice.totalAmount))}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-text-muted">Paid</p>
-            <p className="font-medium text-success">
-              {formatCurrency(Number(invoice.amountPaid))}
-            </p>
+            <p className="font-medium text-success">{formatCurrency(Number(invoice.amountPaid))}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-text-muted">Balance</p>
-            <p className={classNames(
-              "font-medium",
-              Number(invoice.balance) > 0 ? "text-error" : "text-text-muted",
-            )}>
+            <p className={classNames("font-medium", Number(invoice.balance) > 0 ? "text-error" : "text-text-muted")}>
               {formatCurrency(Number(invoice.balance))}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 shrink-0">
           <Badge
             label={statusLabel(invoice.paymentStatus)}
             variant={statusVariant(invoice.paymentStatus)}
@@ -230,13 +225,13 @@ function InvoiceRow({
               variant="secondary"
               onClick={(e) => { e.stopPropagation(); onRecordPayment(invoice); }}
             >
-              Record payment
+              <span className="hidden sm:inline">Record payment</span>
+              <span className="sm:hidden">Pay</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* Expanded payment history */}
       {expanded && <PaymentHistory invoiceId={invoice.id} />}
     </div>
   );
@@ -362,15 +357,21 @@ export default function CollectionsPage() {
     try {
       const result = await recordPayment.mutateAsync({
         ...data,
+        amount:        Number(data.amount),   // ensure number not string
         paymentMethod: data.paymentMethod as PaymentMethod,
       });
       paymentForm.reset();
       setPaymentModal(false);
       setSelectedInvoice(null);
-      showToast(`Payment of ${formatCurrency(data.amount)} recorded. Receipt generated.`, "success");
-      openReceipt(result.payment.id);
+      showToast(
+        `Payment of ${formatCurrency(Number(data.amount))} recorded successfully.`,
+        "success",
+      );
+      // Optional: open receipt only if user wants it
+      const open = window.confirm("Payment recorded! Open receipt in new tab?");
+      if (open) openReceipt(result.payment.id);
     } catch (err) {
-      showToast((err as Error).message, "error");
+      showToast((err as Error).message ?? "Failed to record payment.", "error");
     }
   }
 
@@ -410,7 +411,7 @@ export default function CollectionsPage() {
     return (
       <div className="flex flex-col gap-6">
         <div className="h-8 w-48 bg-surface-tertiary rounded animate-pulse" />
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="h-28 bg-surface-tertiary rounded-lg animate-pulse" />
           ))}
@@ -452,7 +453,7 @@ export default function CollectionsPage() {
         />
 
         {/* Stat cards */}
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title="Total expected"
             value={formatCurrency(metrics?.totalExpected ?? 0)}
@@ -471,7 +472,7 @@ export default function CollectionsPage() {
         </div>
 
         {/* Quick status counts */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: "Fully paid",     value: metrics?.paidCount      ?? 0, color: "text-success" },
             { label: "Partially paid", value: metrics?.partialCount    ?? 0, color: "text-warning" },
@@ -909,14 +910,14 @@ export default function CollectionsPage() {
               required
               hint={`Max: ${formatCurrency(Number(selectedInvoice.balance))}`}
               error={paymentForm.formState.errors.amount?.message}
-              {...paymentForm.register("amount")}
+              {...paymentForm.register("amount", { valueAsNumber: true })}
             />
 
             <div>
               <label className="block text-xs font-semibold text-text-primary mb-1.5">
                 Payment method <span className="text-error">*</span>
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {METHOD_OPTIONS.map((opt) => {
                   const selected = paymentForm.watch("paymentMethod") === opt.value;
                   return (
