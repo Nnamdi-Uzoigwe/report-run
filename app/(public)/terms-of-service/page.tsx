@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalDocument, type LegalSection } from "@/components/public/LegalDocument";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — ReportRun",
-  description: "The terms that govern use of the ReportRun platform.",
+  title: "Terms of Service — EduNovtryx",
+  description: "The terms that govern use of the EduNovtryx platform.",
 };
 
 const sections: LegalSection[] = [
@@ -13,8 +13,8 @@ const sections: LegalSection[] = [
     body: (
       <p>
         These Terms of Service (&ldquo;Terms&rdquo;) govern access to and use
-        of ReportRun&rsquo;s website and school-management platform (the
-        &ldquo;Service&rdquo;), operated by ReportRun (&ldquo;we&rdquo;,
+        of EduNovtryx&rsquo;s website and school-management platform (the
+        &ldquo;Service&rdquo;), operated by EduNovtryx (&ldquo;we&rdquo;,
         &ldquo;us&rdquo;). By creating an account, subscribing to a plan, or
         otherwise using the Service, you agree to these Terms on behalf of
         yourself and, where applicable, the school you represent (the
@@ -28,7 +28,7 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          ReportRun provides tools for schools to manage staff duty
+          EduNovtryx provides tools for schools to manage staff duty
           allocation, student academic results, attendance, fee collection,
           and parent communication, delivered as a subscription
           (&ldquo;Software-as-a-Service&rdquo;) product.
@@ -56,7 +56,7 @@ const sections: LegalSection[] = [
           You are responsible for maintaining the confidentiality of your
           login credentials and for all activity that occurs under your
           account. Notify us promptly at{" "}
-          <a href="mailto:hello@reportrun.ng">hello@reportrun.ng</a> if you
+          <a href="mailto:info@novtryx.com">info@novtryx.com</a> if you
           suspect unauthorised access.
         </p>
       </>
@@ -169,7 +169,7 @@ const sections: LegalSection[] = [
       <>
         <p>
           The Service, including its software, design, and branding, is
-          owned by ReportRun and protected by intellectual property laws. We
+          owned by EduNovtryx and protected by intellectual property laws. We
           grant Schools a limited, non-exclusive, non-transferable licence to
           use the Service during an active subscription.
         </p>
@@ -223,7 +223,7 @@ const sections: LegalSection[] = [
     heading: "Limitation of liability",
     body: (
       <p>
-        To the maximum extent permitted by law, ReportRun will not be liable
+        To the maximum extent permitted by law, EduNovtryx will not be liable
         for indirect, incidental, special, or consequential damages arising
         from use of the Service. Our aggregate liability for any claim
         arising out of these Terms will not exceed the subscription fees
@@ -262,8 +262,7 @@ const sections: LegalSection[] = [
     body: (
       <p>
         Questions about these Terms can be sent to{" "}
-        <a href="mailto:hello@reportrun.ng">hello@reportrun.ng</a> or by post
-        to 14 Ahmadu Bello Way, Abuja, FCT, Nigeria.
+        <a href="mailto:info@novtryx.com">info@novtryx.com</a>
       </p>
     ),
   },
@@ -277,7 +276,7 @@ export default function TermsOfServicePage() {
       effectiveDate="6 July 2026"
       intro={
         <p>
-          Please read these Terms carefully before using ReportRun. They
+          Please read these Terms carefully before using EduNovtryx. They
           apply to school administrators, staff members, and anyone else who
           accesses the Service on a School&rsquo;s behalf.
         </p>

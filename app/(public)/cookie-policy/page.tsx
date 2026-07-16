@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalDocument, type LegalSection } from "@/components/public/LegalDocument";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — ReportRun",
-  description: "How ReportRun uses cookies on its website and dashboard.",
+  title: "Cookie Policy — EduNovtryx",
+  description: "How EduNovtryx uses cookies on its website and dashboard.",
 };
 
 const sections: LegalSection[] = [
@@ -15,7 +15,7 @@ const sections: LegalSection[] = [
         Cookies are small text files placed on your device when you visit a
         website. They can be used to keep you signed in, remember
         preferences, or measure how a site is used. This policy explains the
-        cookies ReportRun uses and why.
+        cookies EduNovtryx uses and why.
       </p>
     ),
   },
@@ -25,7 +25,7 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          ReportRun keeps cookie use to the minimum needed to run the
+          EduNovtryx keeps cookie use to the minimum needed to run the
           Service. We currently use one category of cookie:
         </p>
         <ul>
@@ -40,7 +40,7 @@ const sections: LegalSection[] = [
         </ul>
         <p>
           We do not currently use analytics, advertising, or third-party
-          tracking cookies on the ReportRun website or dashboard. If this
+          tracking cookies on the EduNovtryx website or dashboard. If this
           changes in the future, we will update this policy and, where
           required by law, request your consent before setting non-essential
           cookies.
@@ -56,7 +56,7 @@ const sections: LegalSection[] = [
         When you make a payment, you are directed to Paystack&rsquo;s
         secure checkout, which may set its own cookies to process the
         transaction. Those cookies are governed by Paystack&rsquo;s own
-        privacy and cookie practices, not by ReportRun.
+        privacy and cookie practices, not by EduNovtryx.
       </p>
     ),
   },
@@ -95,7 +95,7 @@ const sections: LegalSection[] = [
     body: (
       <p>
         Questions about this Cookie Policy can be sent to{" "}
-        <a href="mailto:hello@reportrun.ng">hello@reportrun.ng</a>.
+        <a href="mailto:info@novtryx.com">info@novtryx.com</a>.
       </p>
     ),
   },
@@ -112,7 +112,7 @@ export default function CookiePolicyPage() {
           <a href="/privacy-policy" className="text-navy-600">
             Privacy Policy
           </a>
-          . It explains exactly which cookies ReportRun sets and why.
+          . It explains exactly which cookies EduNovtryx sets and why.
         </p>
       }
       sections={sections}

@@ -334,7 +334,7 @@ function BankAccountSection({
               <span>Exactly ₦50,000 — settled directly to your bank account by Paystack</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="font-bold shrink-0">ReportRun keeps:</span>
+              <span className="font-bold shrink-0">EduNovtryx keeps:</span>
               <span>5% platform fee (Paystack's 1.5% processing fee is deducted from our share)</span>
             </div>
           </div>
@@ -1288,7 +1288,7 @@ export default function SettingsPage() {
                               loading={initiateSub.isPending}
                               onClick={() => {
                                 if (plan.isCustom) {
-                                  window.open("mailto:hello@novtryx.com?subject=ReportRun Custom Plan", "_blank");
+                                  window.open("mailto:info@novtryx.com?subject=EduNovtryx Custom Plan", "_blank");
                                 } else if (isFree) {
                                   showToast("Contact support to downgrade to the free plan.", "success");
                                 } else {

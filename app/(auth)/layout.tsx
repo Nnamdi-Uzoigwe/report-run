@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function AuthLayout({
@@ -11,11 +12,9 @@ export default function AuthLayout({
       <header className="bg-surface border-b border-border">
         <div className="container-page h-14 flex items-center justify-between">
           <Link href="/" className="inline-flex items-center gap-2 no-underline">
-            <span className="inline-flex items-center justify-center w-7 h-7 bg-navy-600 rounded text-white text-xs font-bold select-none">
-              RR
-            </span>
-            <span className="font-semibold text-text-primary text-sm">
-              ReportRun
+             <Image src="/edunovtryx-logo.png" height={30} width={30} alt="logo" />
+            <span className="font-semibold text-navy-700 text-base">
+              EduNovtryx
             </span>
           </Link>
           <Link
@@ -35,7 +34,7 @@ export default function AuthLayout({
       {/* Footer */}
       <footer className="py-4 text-center">
         <p className="text-xs text-text-muted">
-          &copy; {new Date().getFullYear()} ReportRun. All rights reserved.
+          &copy; {new Date().getFullYear()} EduNovtryx. All rights reserved.
         </p>
       </footer>
     </div>

@@ -798,7 +798,7 @@ function GraduateModal({
             max={2100}
             value={year}
             onChange={(e) => { setYear(Number(e.target.value)); setError(null); }}
-            className="w-full h-10 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 font-mono text-lg"
+            className="w-full h-10 px-3 text-sm border border-border rounded bg-surface text-text-primary focus:outline-2 focus:outline-navy-600 font-mono"
           />
           {error && (
             <p className="text-xs text-error mt-1.5 flex items-center gap-1">

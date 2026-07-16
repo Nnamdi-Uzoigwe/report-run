@@ -40,7 +40,7 @@ function LoginContent() {
       <div className="bg-surface border border-border rounded-lg p-8">
         <div className="mb-6">
           <h1 className="text-xl font-semibold text-text-primary">
-            Sign in to ReportRun
+            Sign in to EduNovtryx
           </h1>
           <p className="text-sm text-text-muted mt-1">
             Enter your school admin credentials below.

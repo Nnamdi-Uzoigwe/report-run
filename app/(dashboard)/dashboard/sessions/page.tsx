@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  PageHeader, Card, CardHeader, Badge, Button, Input, Modal, EmptyState,
+  PageHeader, Card, Badge, Button, Input, Modal, EmptyState,
 } from "@/components/ui";
 import {
   useSessions, useCreateSession, useActivateSession,
@@ -18,7 +18,6 @@ import {
 import { useClasses } from "@/lib/queries/classes";
 import { useAuthStore } from "@/lib/store";
 import { usePermission } from "@/lib/hooks/usePermission";
-import { classNames } from "@/lib/utils";
 import type { AcademicSession, Term } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────

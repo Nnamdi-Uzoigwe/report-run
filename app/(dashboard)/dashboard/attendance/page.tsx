@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from "@/lib/store";
 import { useAssignmentsByUser } from "@/lib/queries/staff";
 import {
-  PageHeader, Card, CardHeader, Badge, Button, EmptyState,
+  PageHeader, Card, Badge, Button, EmptyState,
 } from "@/components/ui";
 import {
   useActiveSession,

@@ -118,7 +118,7 @@ export default async function PricingPage() {
           <p className="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-2">
             Pricing
           </p>
-          <h1 className="text-4xl font-semibold text-text-primary mb-4">
+          <h1 className="text-4xl font-semibold text-navy-700 mb-4">
             Simple, term-based pricing
           </h1>
           <p className="text-lg text-text-secondary">

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { LegalDocument, type LegalSection } from "@/components/public/LegalDocument";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — ReportRun",
+  title: "Privacy Policy — EduNovtryx",
   description:
-    "How ReportRun collects, uses, and protects data for schools, staff, students, and parents.",
+    "How EduNovtryx collects, uses, and protects data for schools, staff, students, and parents.",
 };
 
 const sections: LegalSection[] = [
@@ -14,24 +14,24 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          ReportRun (&ldquo;<strong>ReportRun</strong>&rdquo;, &ldquo;we&rdquo;,
+          EduNovtryx (&ldquo;<strong>EduNovtryx</strong>&rdquo;, &ldquo;we&rdquo;,
           &ldquo;us&rdquo;) is a school management platform built for Nigerian
           schools, covering staff duty allocation, academic results, fee
-          collection, attendance, and parent communication. ReportRun is
-          operated from 14 Ahmadu Bello Way, Abuja, FCT, Nigeria.
+          collection, attendance, and parent communication. EduNovtryx is
+          operated Remotely.
         </p>
         <p>
           This Privacy Policy explains what personal data we collect through
-          the ReportRun website and application (the &ldquo;Service&rdquo;),
+          the EduNovtryx website and application (the &ldquo;Service&rdquo;),
           why we collect it, and the choices available to you. It applies to
           school administrators, staff, students, and parents/guardians whose
           data is processed through the Service.
         </p>
         <p>
-          A school that signs up for ReportRun (the &ldquo;
+          A school that signs up for EduNovtryx (the &ldquo;
           <strong>School</strong>&rdquo;) is the data controller for the
           student, parent, and staff records it enters into the platform.
-          ReportRun acts as a data processor on the School&rsquo;s behalf for
+          EduNovtryx acts as a data processor on the School&rsquo;s behalf for
           that data, and as a data controller for the account and billing
           information of the School itself. See our{" "}
           <a href="/data-processing-agreement">Data Processing Agreement</a>{" "}
@@ -94,7 +94,7 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          Because ReportRun is used by schools to manage student records, we
+          Because EduNovtryx is used by schools to manage student records, we
           process personal data belonging to minors. This data is entered and
           controlled by the School, not by us or by the student directly. We
           rely on the School to have the appropriate legal basis and, where
@@ -191,7 +191,7 @@ const sections: LegalSection[] = [
           </li>
           <li>
             <strong>Regulators or law enforcement</strong>, where required by
-            law or to protect the rights, property, or safety of ReportRun,
+            law or to protect the rights, property, or safety of EduNovtryx,
             our users, or others.
           </li>
         </ul>
@@ -259,7 +259,7 @@ const sections: LegalSection[] = [
           processing is based on consent.
         </p>
         <p>
-          If your data is held on a school&rsquo;s ReportRun account (for
+          If your data is held on a school&rsquo;s EduNovtryx account (for
           example, as a student, parent, or staff member), please contact the
           School directly, as it controls that data. If you are a School
           administrator, contact us using the details below.
@@ -297,8 +297,7 @@ const sections: LegalSection[] = [
     body: (
       <p>
         Questions about this Privacy Policy or your data can be sent to{" "}
-        <a href="mailto:hello@reportrun.ng">hello@reportrun.ng</a> or by post
-        to 14 Ahmadu Bello Way, Abuja, FCT, Nigeria.
+        <a href="mailto:info@novtryx.com">info@novtryx.com</a>
       </p>
     ),
   },
@@ -311,7 +310,7 @@ export default function PrivacyPolicyPage() {
       lastUpdated="6 July 2026"
       intro={
         <p>
-          This policy describes how ReportRun handles personal data across
+          This policy describes how EduNovtryx handles personal data across
           our website and school-management platform. It is written to be
           read alongside our{" "}
           <a href="/terms-of-service" className="text-navy-600">

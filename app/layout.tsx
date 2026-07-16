@@ -4,8 +4,8 @@ import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: {
-    default:  "ReportRun — School Management Platform",
-    template: "%s | ReportRun",
+    default:  "EduNovtryx | School Management Platform",
+    template: "%s | EduNovtryx",
   },
   description:
     "The complete school management platform for staff duties, student results, collections, and communication.",

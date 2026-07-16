@@ -88,7 +88,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           )}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-text-primary truncate leading-tight">
-              {school?.name ?? "ReportRun"}
+              {school?.name ?? "EduNovtryx"}
             </p>
             <p className="text-xs text-text-muted truncate leading-tight">
               {subscription?.plan?.name ?? "Free plan"}

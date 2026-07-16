@@ -31,9 +31,8 @@ const subjectOptions = [
 ];
 
 const contactDetails = [
-  { icon: Mail,  label: "Email",  value: "hello@reportrun.ng",           href: "mailto:hello@reportrun.ng" },
-  { icon: Phone, label: "Phone",  value: "+234 800 REPORT (737678)",     href: "tel:+234800737678"         },
-  { icon: MapPin,label: "Office", value: "14 Ahmadu Bello Way, Abuja, FCT", href: undefined               },
+  { icon: Mail,  label: "Email",  value: "info@novtryx.com",           href: "mailto:info@novtryx.com" },
+  { icon: Phone, label: "Phone",  value: "09061143236, 08160192784",     href: "#" }
 ];
 
 // ── Page ──────────────────────────────────────────────────────
@@ -77,7 +76,7 @@ export default function ContactPage() {
             </h1>
             <p className="text-lg text-text-secondary leading-relaxed">
               Whether you want a demo, have a pricing question, or just want to
-              know if ReportRun fits your school — we respond within one
+              know if EduNovtryx fits your school; we respond within one
               business day.
             </p>
           </div>
@@ -108,7 +107,7 @@ export default function ContactPage() {
                             {detail.label}
                           </p>
                           {detail.href ? (
-                            <a href={detail.href} className="text-sm text-text-primary hover:text-navy-600 transition-colors">
+                            <a href={detail.href} className="text-sm font-semibold text-text-primary hover:text-navy-600 transition-colors">
                               {detail.value}
                             </a>
                           ) : (
@@ -125,7 +124,7 @@ export default function ContactPage() {
                 <h3 className="text-sm font-semibold text-text-primary mb-3">Support hours</h3>
                 <div className="flex flex-col gap-2">
                   {[
-                    { day: "Monday – Friday", hours: "8:00am – 6:00pm" },
+                    { day: "Monday - Friday", hours: "8:00am – 6:00pm" },
                     { day: "Saturday",        hours: "9:00am – 1:00pm" },
                     { day: "Sunday",          hours: "Closed"          },
                   ].map((row) => (

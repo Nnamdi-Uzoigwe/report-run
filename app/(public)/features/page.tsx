@@ -16,7 +16,7 @@ const featureGroups = [
     label: "Collections",
     title: "Fee collection that actually gets collected",
     description:
-      "Most schools lose 20–30% of expected fees simply because follow-up is manual and inconsistent. ReportRun automates the entire collection cycle — from invoice to receipt to reminder.",
+      "Most schools lose 20–30% of expected fees simply because follow-up is manual and inconsistent. EduNovtryx automates the entire collection cycle — from invoice to receipt to reminder.",
     features: [
       "Per-student fee ledger with running balance",
       "Record cash, bank transfer, POS, and online payments",
@@ -26,7 +26,7 @@ const featureGroups = [
       "Export payment records to Excel",
     ],
     stats: [
-      { value: "89%", label: "Average collection rate on ReportRun" },
+      { value: "89%", label: "Average collection rate on EduNovtryx" },
       { value: "3×",  label: "Faster than manual ledger reconciliation" },
     ],
   },
@@ -36,7 +36,7 @@ const featureGroups = [
     label: "Reminders",
     title: "Automated reminders that run without you",
     description:
-      "Configure your reminder rules once per term. ReportRun sends SMS and email reminders to parents on your schedule — days before the due date, on the due date, and after.",
+      "Configure your reminder rules once per term. EduNovtryx sends SMS and email reminders to parents on your schedule — days before the due date, on the due date, and after.",
     features: [
       "Set trigger rules by days before due date",
       "Send via SMS, email, or both",
@@ -56,7 +56,7 @@ const featureGroups = [
     label: "Results",
     title: "Results management without the headache",
     description:
-      "From data entry to broadsheet to report card — ReportRun handles the full results pipeline. The PDF scraper pulls results directly from uploaded documents so you never retype scores again.",
+      "From data entry to broadsheet to report card — EduNovtryx handles the full results pipeline. The PDF scraper pulls results directly from uploaded documents so you never retype scores again.",
     features: [
       "Manual result entry per subject per student",
       "PDF scraper to extract scores from uploaded files",
@@ -96,7 +96,7 @@ const featureGroups = [
     label: "Academics",
     title: "Full academic configuration control",
     description:
-      "Set up your classes, sections, subjects, and grading scales exactly as your school runs them. ReportRun adapts to your structure — not the other way around.",
+      "Set up your classes, sections, subjects, and grading scales exactly as your school runs them. EduNovtryx adapts to your structure — not the other way around.",
     features: [
       "Create classes and sections (e.g. JSS 1A, JSS 1B)",
       "Assign form teachers per class and section",
@@ -177,11 +177,11 @@ export default function FeaturesPage() {
             <p className="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-2">
               Features
             </p>
-            <h1 className="text-4xl font-semibold text-text-primary mb-4">
+            <h1 className="text-4xl font-semibold text-navy-700 mb-4">
               Built for how Nigerian schools actually work
             </h1>
             <p className="text-lg text-text-secondary leading-relaxed">
-              Every feature in ReportRun was designed around the real workflows
+              Every feature in EduNovtryx was designed around the real workflows
               of school administrators, bursars, and vice principals — not
               generic education software templates.
             </p>

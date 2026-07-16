@@ -7,7 +7,7 @@ export function HeroDashboard() {
         <div className="w-2.5 h-2.5 rounded-full bg-border" />
         <div className="w-2.5 h-2.5 rounded-full bg-border" />
         <div className="flex-1 mx-3 h-5 bg-border rounded text-xs flex items-center px-2 text-text-muted">
-          <span className="text-[10px]">app.reportrun.ng/dashboard</span>
+          <span className="text-[10px]">app.edunovtryx.com/dashboard</span>
         </div>
       </div>
 
